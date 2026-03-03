@@ -1,0 +1,192 @@
+{
+  "projectType": "ai-ml",
+  "projectName": "GraphRAG",
+  "projectDescription": "A modular graph-based Retrieval-Augmented Generation (RAG) system for extracting structured knowledge from unstructured text using LLMs",
+  "theme": "aspen",
+  "primaryColor": "#0078D4",
+  "lightColor": "#50E6FF",
+  "darkColor": "#004578",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/overview",
+              "concepts/knowledge-graphs",
+              "concepts/indexing-pipeline",
+              "concepts/community-detection",
+              "concepts/retrieval-methods"
+            ]
+          },
+          {
+            "group": "Indexing",
+            "pages": [
+              "indexing/overview",
+              "indexing/architecture",
+              "indexing/dataflow",
+              "indexing/methods",
+              "indexing/inputs",
+              "indexing/outputs",
+              "indexing/custom-graphs"
+            ]
+          },
+          {
+            "group": "Query Engine",
+            "pages": [
+              "query/overview",
+              "query/global-search",
+              "query/local-search",
+              "query/drift-search",
+              "query/basic-search",
+              "query/question-generation"
+            ]
+          },
+          {
+            "group": "Prompt Tuning",
+            "pages": [
+              "prompt-tuning/overview",
+              "prompt-tuning/auto-tuning",
+              "prompt-tuning/manual-tuning"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/overview",
+              "configuration/initialization",
+              "configuration/settings",
+              "configuration/llm-models",
+              "configuration/storage",
+              "configuration/caching"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/cli-usage",
+              "guides/python-api",
+              "guides/azure-setup",
+              "guides/visualization",
+              "guides/migration",
+              "guides/best-practices"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Python API",
+            "pages": [
+              "api/overview",
+              "api/index",
+              "api/query",
+              "api/prompt-tune"
+            ]
+          },
+          {
+            "group": "CLI Reference",
+            "pages": [
+              "cli/overview",
+              "cli/init",
+              "cli/index",
+              "cli/update",
+              "cli/query",
+              "cli/prompt-tune"
+            ]
+          },
+          {
+            "group": "Data Models",
+            "pages": [
+              "api/data-models/entities",
+              "api/data-models/relationships",
+              "api/data-models/communities",
+              "api/data-models/claims",
+              "api/data-models/text-units"
+            ]
+          },
+          {
+            "group": "Configuration Schema",
+            "pages": [
+              "api/config/schema",
+              "api/config/enums",
+              "api/config/defaults"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Examples",
+        "groups": [
+          {
+            "group": "Tutorials",
+            "pages": [
+              "examples/basic-tutorial",
+              "examples/custom-prompts",
+              "examples/azure-deployment",
+              "examples/multi-lingual"
+            ]
+          },
+          {
+            "group": "Notebooks",
+            "pages": [
+              "examples/notebooks/global-search",
+              "examples/notebooks/local-search",
+              "examples/notebooks/drift-search",
+              "examples/notebooks/comparison"
+            ]
+          },
+          {
+            "group": "Use Cases",
+            "pages": [
+              "examples/use-cases/research-analysis",
+              "examples/use-cases/document-qa",
+              "examples/use-cases/enterprise-knowledge"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Knowledge Graph Extraction - Extract entities, relationships, and claims from unstructured text using LLMs",
+    "Hierarchical Community Detection - Leiden algorithm for multi-level graph clustering and community summaries",
+    "Global Search - Map-reduce search across AI-generated community reports for holistic dataset understanding",
+    "Local Search - Entity-focused search combining knowledge graph with raw text chunks",
+    "DRIFT Search - Enhanced local search with community context for comprehensive retrieval",
+    "Automated Prompt Tuning - Generate domain-specific prompts optimized for your data",
+    "Flexible Configuration - YAML-based configuration with support for multiple LLM providers",
+    "CLI and Python API - Command-line tools and programmatic access for all operations",
+    "Vector Embeddings - Text embedding support with multiple vector store backends",
+    "Incremental Updates - Update existing indexes with new data efficiently"
+  ],
+  "publicApiSurface": [
+    "build_index() - Build a knowledge graph index from source documents",
+    "global_search() - Perform global search across community summaries",
+    "global_search_streaming() - Stream global search results",
+    "local_search() - Perform entity-focused local search",
+    "local_search_streaming() - Stream local search results",
+    "drift_search() - Perform DRIFT search with community context",
+    "drift_search_streaming() - Stream DRIFT search results",
+    "basic_search() - Perform basic vector similarity search",
+    "basic_search_streaming() - Stream basic search results",
+    "generate_indexing_prompts() - Generate optimized prompts for indexing",
+    "graphrag init - Initialize a new GraphRAG project",
+    "graphrag index - Build knowledge graph index",
+    "graphrag update - Update existing index with new data",
+    "graphrag query - Query the knowledge graph",
+    "graphrag prompt-tune - Auto-generate optimized prompts"
+  ]
+}
