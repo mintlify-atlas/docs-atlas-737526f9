@@ -1,0 +1,485 @@
+---
+title: Visualization
+description: Visualize and debug your GraphRAG knowledge graphs using Gephi and GraphML exports
+---
+
+GraphRAG generates GraphML files that can be visualized using graph visualization tools like Gephi. This guide walks you through the complete process of creating beautiful, insightful visualizations of your knowledge graph.
+
+## Overview
+
+Visualizing your knowledge graph helps you:
+
+- **Understand structure**: See how entities and relationships are organized
+- **Identify clusters**: Discover communities and themes in your data
+- **Debug issues**: Spot problems with entity extraction or relationships
+- **Communicate insights**: Share visual representations with stakeholders
+
+## Prerequisites
+
+Before visualizing your graph, you need:
+
+- A completed GraphRAG index with GraphML snapshots enabled
+- [Gephi](https://gephi.org) installed on your system
+- The Leiden Algorithm plugin for Gephi
+
+## Enable GraphML snapshots
+
+GraphML snapshots must be enabled during indexing to generate visualization files.
+
+<Steps>
+  <Step title="Configure settings.yaml">
+    Open your `settings.yaml` and ensure GraphML snapshots are enabled:
+    
+    ```yaml settings.yaml
+    snapshots:
+      graphml: true
+    ```
+    
+    <Tip>
+      This setting is enabled by default in newly initialized projects.
+    </Tip>
+  </Step>
+  
+  <Step title="Run the index">
+    ```bash
+    graphrag index --root ./my-project
+    ```
+    
+    This generates a `graph.graphml` file in your output directory.
+  </Step>
+  
+  <Step title="Locate the GraphML file">
+    After indexing completes, find the file at:
+    
+    ```
+    ./my-project/output/graph.graphml
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  If you've already run indexing without GraphML enabled, you'll need to re-run the index with the setting enabled.
+</Warning>
+
+## Visualization workflow
+
+Follow these steps to create a professional graph visualization:
+
+### 1. Import into Gephi
+
+<Steps>
+  <Step title="Launch Gephi">
+    Open Gephi on your system.
+  </Step>
+  
+  <Step title="Import the GraphML file">
+    1. Go to **File** → **Open**
+    2. Navigate to your output folder
+    3. Select `graph.graphml`
+    4. Click **Open**
+    
+    You'll see a basic visualization of your graph nodes and edges.
+  </Step>
+</Steps>
+
+### 2. Install Leiden Algorithm plugin
+
+The Leiden algorithm detects communities in your graph, which is essential for meaningful visualization.
+
+<Steps>
+  <Step title="Open Plugin Manager">
+    Go to **Tools** → **Plugins**
+  </Step>
+  
+  <Step title="Find Leiden Algorithm">
+    1. Click the **Available Plugins** tab
+    2. Search for "Leiden Algorithm"
+    3. Check the box next to it
+    4. Click **Install**
+  </Step>
+  
+  <Step title="Restart Gephi">
+    Restart Gephi after installation completes
+  </Step>
+</Steps>
+
+### 3. Run statistics
+
+Generate statistics that will help you visualize the graph structure.
+
+<Steps>
+  <Step title="Calculate Average Degree">
+    In the **Statistics** panel (right side):
+    
+    1. Find **Average Degree**
+    2. Click **Run**
+    3. Click **Close** on the report dialog
+  </Step>
+  
+  <Step title="Run Leiden Algorithm">
+    In the **Statistics** panel:
+    
+    1. Find **Leiden Algorithm**
+    2. Click **Run**
+    3. Configure settings:
+       - **Quality function**: Modularity
+       - **Resolution**: 1.0
+    4. Click **OK**
+    5. Close the report when complete
+  </Step>
+</Steps>
+
+<Tip>
+  The Leiden algorithm identifies communities (clusters) in your graph. Higher resolution values create more, smaller communities.
+</Tip>
+
+### 4. Color nodes by cluster
+
+Color-code nodes based on their community membership.
+
+<Steps>
+  <Step title="Open Appearance panel">
+    Find the **Appearance** panel in the upper left
+  </Step>
+  
+  <Step title="Configure node colors">
+    1. Click the **Nodes** tab
+    2. Click **Partition** (not Ranking)
+    3. Click the color palette icon in the upper right
+    4. Select **Cluster** from the dropdown
+  </Step>
+  
+  <Step title="Generate color palette">
+    1. Click **Palette...**
+    2. Click **Generate...**
+    3. Uncheck **Limit number of colors**
+    4. Click **Generate**
+    5. Click **OK**
+  </Step>
+  
+  <Step title="Apply colors">
+    Click **Apply** to color your graph
+  </Step>
+</Steps>
+
+Your graph should now show different colored clusters representing communities in your knowledge graph.
+
+### 5. Resize nodes by degree centrality
+
+Make important nodes (with many connections) larger.
+
+<Steps>
+  <Step title="Select ranking mode">
+    In the **Appearance** panel:
+    
+    1. Ensure **Nodes** is selected
+    2. Click **Ranking** (not Partition)
+    3. Click the sizing icon (three circles of different sizes)
+  </Step>
+  
+  <Step title="Configure node sizes">
+    1. Select **Degree** from the dropdown
+    2. Set **Min size**: 10
+    3. Set **Max size**: 150
+  </Step>
+  
+  <Step title="Apply sizing">
+    Click **Apply**
+  </Step>
+</Steps>
+
+Nodes with more connections will now appear larger, making hubs visually prominent.
+
+### 6. Layout the graph
+
+Arrange nodes spatially to reveal structure.
+
+#### Step 1: OpenORD layout
+
+<Steps>
+  <Step title="Select OpenORD">
+    In the **Layout** panel (lower left), select **OpenORD**
+  </Step>
+  
+  <Step title="Configure settings">
+    Set the following stage iterations:
+    
+    - **Liquid**: 50
+    - **Expansion**: 50
+    - **Cooldown**: 0
+    - **Crunch**: 0
+    - **Simmer**: 0
+  </Step>
+  
+  <Step title="Run layout">
+    1. Click **Run**
+    2. Watch the progress bar
+    3. Click **Stop** when complete
+  </Step>
+</Steps>
+
+<Tip>
+  OpenORD does initial positioning. The graph may still look messy - that's expected.
+</Tip>
+
+#### Step 2: ForceAtlas2 layout
+
+<Steps>
+  <Step title="Select ForceAtlas2">
+    In the **Layout** panel, select **Force Atlas 2**
+  </Step>
+  
+  <Step title="Configure settings">
+    Adjust the following settings:
+    
+    - **Scaling**: 15
+    - **Dissuade Hubs**: ✓ checked
+    - **LinLog mode**: ✗ unchecked
+    - **Prevent Overlap**: ✓ checked
+  </Step>
+  
+  <Step title="Run layout">
+    1. Click **Run**
+    2. Watch as nodes settle into position
+    3. Click **Stop** when nodes stop moving significantly
+    
+    <Warning>
+      This may take several minutes for large graphs. Be patient!
+    </Warning>
+  </Step>
+</Steps>
+
+Your graph should now have a clean, organized layout with distinct communities.
+
+### 7. Add labels (optional)
+
+Display entity names on the visualization.
+
+<Steps>
+  <Step title="Show labels">
+    In the bottom toolbar of the graph view, click the **Show node labels** button ("T" icon)
+  </Step>
+  
+  <Step title="Configure label appearance">
+    1. Click the label settings button
+    2. Adjust:
+       - **Font size**: Based on your preference
+       - **Show labels**: For visible nodes only
+       - **Label color**: Black or contrasting color
+  </Step>
+  
+  <Step title="Resize labels (optional)">
+    You can also size labels by node degree for better readability
+  </Step>
+</Steps>
+
+<Tip>
+  For large graphs, consider showing labels only for important nodes (high degree) to avoid clutter.
+</Tip>
+
+## Understanding your visualization
+
+### Graph elements
+
+<CardGroup cols={2}>
+  <Card title="Nodes" icon="circle-dot">
+    Represent **entities** extracted from your documents (people, organizations, concepts)
+  </Card>
+  <Card title="Edges" icon="arrows-left-right">
+    Represent **relationships** between entities
+  </Card>
+  <Card title="Colors" icon="palette">
+    Indicate **communities** - groups of closely related entities
+  </Card>
+  <Card title="Size" icon="expand">
+    Indicates **centrality** - how many connections an entity has
+  </Card>
+</CardGroup>
+
+### Interpreting patterns
+
+**Dense clusters**: Topics or themes with many interconnected entities
+
+**Bridge nodes**: Entities connecting different communities (often important cross-cutting concepts)
+
+**Peripheral nodes**: Mentioned infrequently or in isolation
+
+**Star patterns**: Central entities with many direct connections (key people, organizations, or concepts)
+
+## Export and share
+
+### Export as image
+
+<Steps>
+  <Step title="Open Preview">
+    Click the **Preview** tab at the top of Gephi
+  </Step>
+  
+  <Step title="Configure preview">
+    Adjust settings for best appearance:
+    
+    - **Preset**: Default
+    - **Background color**: White
+    - **Show labels**: As desired
+  </Step>
+  
+  <Step title="Export">
+    1. Click **Export: SVG/PDF/PNG**
+    2. Choose format (PNG for presentations, SVG for editing)
+    3. Set resolution (high for publications)
+    4. Save file
+  </Step>
+</Steps>
+
+### Export interactive version
+
+Gephi can export interactive web visualizations:
+
+1. Install the **Sigma Exporter** plugin
+2. Go to **File** → **Export** → **Sigma.js template**
+3. Configure and export to create an interactive HTML visualization
+
+## Advanced techniques
+
+### Filter by community
+
+Focus on specific communities:
+
+<Steps>
+  <Step title="Open Filters panel">
+    Find the **Filters** panel on the right
+  </Step>
+  
+  <Step title="Add partition filter">
+    1. Expand **Attributes** → **Partition**
+    2. Drag **Cluster** to the **Queries** area
+  </Step>
+  
+  <Step title="Select communities">
+    Check/uncheck clusters to show/hide communities
+  </Step>
+  
+  <Step title="Apply filter">
+    Click **Filter** to update the visualization
+  </Step>
+</Steps>
+
+### Size by other metrics
+
+You can size nodes by different centrality measures:
+
+- **Betweenness centrality**: Nodes that connect different parts of the graph
+- **Closeness centrality**: Nodes close to all others
+- **Eigenvector centrality**: Nodes connected to other important nodes
+
+Run these under **Statistics** → **Network Overview**, then use them in the **Appearance** panel.
+
+### Multi-level analysis
+
+GraphRAG's Leiden algorithm creates hierarchical communities. To visualize different levels:
+
+1. Run Leiden multiple times with different resolution parameters
+2. Create separate visualizations for each level
+3. Compare to see how communities nest within each other
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Graph appears as a dense ball">
+    **Solution:**
+    
+    - Run ForceAtlas2 longer (it may take time to untangle)
+    - Increase **Scaling** parameter to 20-30
+    - Enable **Prevent Overlap**
+    - Try **Fruchterman Reingold** layout instead
+  </Accordion>
+  
+  <Accordion title="Nodes are all the same color">
+    **Solution:**
+    
+    - Ensure you ran the Leiden Algorithm
+    - Check that you selected **Partition** not **Ranking**
+    - Verify **Cluster** appears in the dropdown
+    - Re-run Leiden if needed
+  </Accordion>
+  
+  <Accordion title="Cannot find graph.graphml file">
+    **Solution:**
+    
+    - Verify `snapshots.graphml: true` in settings.yaml
+    - Re-run indexing with snapshots enabled
+    - Check the `storage.base_dir` setting for output location
+  </Accordion>
+  
+  <Accordion title="Gephi crashes or runs slowly">
+    **Solution:**
+    
+    - Increase Gephi's memory allocation
+    - Filter the graph to show fewer nodes
+    - Use a more powerful machine for large graphs
+    - Consider sampling your data before indexing
+  </Accordion>
+</AccordionGroup>
+
+## Example workflow summary
+
+Here's the complete process at a glance:
+
+<Steps>
+  <Step title="Enable GraphML">
+    ```yaml
+    snapshots:
+      graphml: true
+    ```
+  </Step>
+  
+  <Step title="Run indexing">
+    ```bash
+    graphrag index --root ./my-project
+    ```
+  </Step>
+  
+  <Step title="Import to Gephi">
+    Open `output/graph.graphml`
+  </Step>
+  
+  <Step title="Install Leiden plugin">
+    Tools → Plugins → Leiden Algorithm
+  </Step>
+  
+  <Step title="Run statistics">
+    - Average Degree
+    - Leiden Algorithm (Modularity, Resolution 1.0)
+  </Step>
+  
+  <Step title="Apply appearance">
+    - Color by Cluster (Partition)
+    - Size by Degree (10-150)
+  </Step>
+  
+  <Step title="Layout">
+    - OpenORD (Liquid 50, Expansion 50)
+    - ForceAtlas2 (Scaling 15, Dissuade Hubs, Prevent Overlap)
+  </Step>
+  
+  <Step title="Export">
+    Preview → Export as PNG/SVG
+  </Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/configuration/overview">
+    Learn about all configuration options
+  </Card>
+  <Card title="Best practices" icon="lightbulb" href="/guides/best-practices">
+    Optimize your GraphRAG workflow
+  </Card>
+  <Card title="Query methods" icon="magnifying-glass" href="/query/overview">
+    Learn different search approaches
+  </Card>
+  <Card title="Data model" icon="database" href="/indexing/outputs">
+    Understand the output schema
+  </Card>
+</CardGroup>

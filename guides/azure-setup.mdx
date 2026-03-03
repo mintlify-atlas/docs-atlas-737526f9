@@ -1,0 +1,563 @@
+---
+title: Azure setup
+description: Configure GraphRAG to work with Azure OpenAI services for chat and embeddings
+---
+
+GraphRAG seamlessly integrates with Azure OpenAI to provide enterprise-grade LLM capabilities. This guide walks you through setting up Azure OpenAI for use with GraphRAG.
+
+## Prerequisites
+
+Before starting, ensure you have:
+
+- An active Azure subscription
+- Access to Azure OpenAI Service
+- Deployed models for chat completion and embeddings
+- GraphRAG installed (`pip install graphrag`)
+
+## Azure OpenAI setup
+
+<Steps>
+  <Step title="Deploy Azure OpenAI models">
+    In the Azure Portal, deploy the required models:
+    
+    1. Navigate to your Azure OpenAI resource
+    2. Go to "Model deployments"
+    3. Deploy a chat model (e.g., `gpt-4o`, `gpt-4-turbo`)
+    4. Deploy an embedding model (e.g., `text-embedding-3-small`)
+    
+    <Tip>
+      Note your deployment names - you'll need these for configuration.
+    </Tip>
+  </Step>
+  
+  <Step title="Gather connection information">
+    Collect the following from your Azure OpenAI resource:
+    
+    - **Endpoint URL**: `https://YOUR-RESOURCE-NAME.openai.azure.com/`
+    - **API Key**: Found under "Keys and Endpoint"
+    - **API Version**: Use `2024-02-15-preview` or later
+    - **Deployment names**: The names you gave your models
+  </Step>
+  
+  <Step title="Initialize GraphRAG project">
+    ```bash
+    graphrag init --root ./my-project
+    ```
+  </Step>
+</Steps>
+
+## Configuration
+
+### Environment variables
+
+The recommended approach is to store sensitive information in environment variables.
+
+<Steps>
+  <Step title="Edit .env file">
+    Open the `.env` file created by `graphrag init`:
+    
+    ```bash .env
+    GRAPHRAG_API_KEY=your-azure-api-key-here
+    GRAPHRAG_API_BASE=https://your-resource-name.openai.azure.com/
+    GRAPHRAG_API_VERSION=2024-02-15-preview
+    ```
+    
+    <Warning>
+      Never commit your `.env` file to version control. Keep your API keys secure.
+    </Warning>
+  </Step>
+  
+  <Step title="Configure settings.yaml">
+    Edit `settings.yaml` to use Azure OpenAI:
+    
+    ```yaml settings.yaml
+    name: "my-azure-project"
+    
+    llm:
+      type: chat
+      model_provider: azure
+      model: gpt-4o  # Your chat deployment name
+      api_base: ${GRAPHRAG_API_BASE}
+      api_key: ${GRAPHRAG_API_KEY}
+      api_version: ${GRAPHRAG_API_VERSION}
+      deployment_name: gpt-4o  # Must match your Azure deployment
+    
+    embedding:
+      type: embedding
+      model_provider: azure
+      model: text-embedding-3-small  # Your embedding deployment name
+      api_base: ${GRAPHRAG_API_BASE}
+      api_key: ${GRAPHRAG_API_KEY}
+      api_version: ${GRAPHRAG_API_VERSION}
+      deployment_name: text-embedding-3-small  # Must match your Azure deployment
+    ```
+  </Step>
+</Steps>
+
+### Rate limiting
+
+Azure OpenAI has token-per-minute (TPM) and requests-per-minute (RPM) limits. Configure these in your settings:
+
+```yaml settings.yaml
+llm:
+  type: chat
+  model_provider: azure
+  model: gpt-4o
+  deployment_name: gpt-4o
+  # Rate limits (adjust based on your Azure quota)
+  requests_per_minute: 60
+  tokens_per_minute: 80000
+  api_base: ${GRAPHRAG_API_BASE}
+  api_key: ${GRAPHRAG_API_KEY}
+  api_version: ${GRAPHRAG_API_VERSION}
+
+embedding:
+  type: embedding
+  model_provider: azure
+  model: text-embedding-3-small
+  deployment_name: text-embedding-3-small
+  # Rate limits for embeddings
+  requests_per_minute: 60
+  tokens_per_minute: 150000
+  api_base: ${GRAPHRAG_API_BASE}
+  api_key: ${GRAPHRAG_API_KEY}
+  api_version: ${GRAPHRAG_API_VERSION}
+```
+
+<Tip>
+  Check your Azure OpenAI quota in the Azure Portal under your resource's "Quotas" section.
+</Tip>
+
+## Model configurations
+
+### Chat models
+
+Different Azure OpenAI chat models have different capabilities and costs:
+
+<Tabs>
+  <Tab title="GPT-4o">
+    Latest and most capable model:
+    
+    ```yaml
+    llm:
+      type: chat
+      model_provider: azure
+      model: gpt-4o
+      deployment_name: gpt-4o
+      max_tokens: 4000
+      temperature: 0.0
+      top_p: 1.0
+    ```
+    
+    **Best for:** Complex reasoning, high-quality extractions
+  </Tab>
+  
+  <Tab title="GPT-4 Turbo">
+    Good balance of performance and cost:
+    
+    ```yaml
+    llm:
+      type: chat
+      model_provider: azure
+      model: gpt-4-turbo
+      deployment_name: gpt-4-turbo
+      max_tokens: 4000
+      temperature: 0.0
+      top_p: 1.0
+    ```
+    
+    **Best for:** Production workloads
+  </Tab>
+  
+  <Tab title="GPT-3.5 Turbo">
+    Most cost-effective option:
+    
+    ```yaml
+    llm:
+      type: chat
+      model_provider: azure
+      model: gpt-35-turbo
+      deployment_name: gpt-35-turbo-16k
+      max_tokens: 4000
+      temperature: 0.0
+      top_p: 1.0
+    ```
+    
+    **Best for:** Testing, development, simple extractions
+  </Tab>
+</Tabs>
+
+### Embedding models
+
+<Tabs>
+  <Tab title="text-embedding-3-small">
+    Balanced performance and cost:
+    
+    ```yaml
+    embedding:
+      type: embedding
+      model_provider: azure
+      model: text-embedding-3-small
+      deployment_name: text-embedding-3-small
+    ```
+    
+    Dimensions: 1536
+  </Tab>
+  
+  <Tab title="text-embedding-3-large">
+    Highest quality embeddings:
+    
+    ```yaml
+    embedding:
+      type: embedding
+      model_provider: azure
+      model: text-embedding-3-large
+      deployment_name: text-embedding-3-large
+    ```
+    
+    Dimensions: 3072
+  </Tab>
+  
+  <Tab title="text-embedding-ada-002">
+    Legacy model (still supported):
+    
+    ```yaml
+    embedding:
+      type: embedding
+      model_provider: azure
+      model: text-embedding-ada-002
+      deployment_name: text-embedding-ada-002
+    ```
+    
+    Dimensions: 1536
+  </Tab>
+</Tabs>
+
+## Multiple model configurations
+
+You can use different models for different workflows:
+
+```yaml settings.yaml
+# Default chat model for most workflows
+llm:
+  type: chat
+  model_provider: azure
+  model: gpt-4o
+  deployment_name: gpt-4o
+  api_base: ${GRAPHRAG_API_BASE}
+  api_key: ${GRAPHRAG_API_KEY}
+  api_version: ${GRAPHRAG_API_VERSION}
+
+# Override for specific workflows
+entity_extraction:
+  llm:
+    type: chat
+    model_provider: azure
+    model: gpt-4-turbo
+    deployment_name: gpt-4-turbo
+    # Use same API settings
+    api_base: ${GRAPHRAG_API_BASE}
+    api_key: ${GRAPHRAG_API_KEY}
+    api_version: ${GRAPHRAG_API_VERSION}
+
+summarize_descriptions:
+  llm:
+    type: chat
+    model_provider: azure
+    model: gpt-35-turbo
+    deployment_name: gpt-35-turbo-16k
+    # Cost optimization for summaries
+    api_base: ${GRAPHRAG_API_BASE}
+    api_key: ${GRAPHRAG_API_KEY}
+    api_version: ${GRAPHRAG_API_VERSION}
+```
+
+## Azure AI Search integration
+
+For production deployments, use Azure AI Search as your vector store:
+
+```yaml settings.yaml
+vector_store:
+  type: azure_ai_search
+  api_key: ${AZURE_SEARCH_API_KEY}
+  url: https://your-search-service.search.windows.net
+  audience: https://search.azure.com
+  
+  # Optional: custom index schema
+  index_schema:
+    entity_description:
+      index_name: graphrag-entities
+    community_full_content:
+      index_name: graphrag-communities
+    text_unit_text:
+      index_name: graphrag-text-units
+```
+
+<Steps>
+  <Step title="Create Azure AI Search resource">
+    In the Azure Portal, create a new Azure AI Search service.
+  </Step>
+  
+  <Step title="Get connection details">
+    - **URL**: `https://YOUR-SERVICE-NAME.search.windows.net`
+    - **API Key**: Found in "Keys" section
+  </Step>
+  
+  <Step title="Add to .env">
+    ```bash .env
+    AZURE_SEARCH_API_KEY=your-search-api-key
+    ```
+  </Step>
+</Steps>
+
+## Testing your configuration
+
+Verify your Azure setup before running a full index:
+
+<Steps>
+  <Step title="Run dry run">
+    ```bash
+    graphrag index --root ./my-project --dry-run --verbose
+    ```
+    
+    This validates your configuration without making API calls.
+  </Step>
+  
+  <Step title="Test with small dataset">
+    Create a small test file:
+    
+    ```bash
+    echo "This is a test document for GraphRAG." > ./my-project/input/test.txt
+    ```
+    
+    Run indexing:
+    
+    ```bash
+    graphrag index --root ./my-project --verbose
+    ```
+  </Step>
+  
+  <Step title="Monitor Azure metrics">
+    Check the Azure Portal to verify:
+    - API calls are succeeding
+    - Token usage is within limits
+    - No throttling errors
+  </Step>
+</Steps>
+
+## Cost optimization
+
+Optimize costs when using Azure OpenAI:
+
+### 1. Use appropriate models
+
+<CardGroup cols={2}>
+  <Card title="Development" icon="flask">
+    Use GPT-3.5 Turbo for testing and development
+  </Card>
+  <Card title="Production" icon="rocket">
+    Use GPT-4o or GPT-4 Turbo for final production runs
+  </Card>
+</CardGroup>
+
+### 2. Enable caching
+
+```yaml settings.yaml
+cache:
+  type: file
+  base_dir: ./cache
+```
+
+Caching stores LLM responses to avoid redundant API calls.
+
+### 3. Optimize chunking
+
+```yaml settings.yaml
+chunking:
+  size: 300  # Larger chunks = fewer LLM calls
+  overlap: 100
+  encoding_model: cl100k_base
+```
+
+### 4. Batch processing
+
+```yaml settings.yaml
+entity_extraction:
+  max_gleanings: 0  # Reduce to 0-1 for cost savings
+```
+
+<Warning>
+  Reducing `max_gleanings` will decrease extraction quality. Test with your data to find the right balance.
+</Warning>
+
+## Authentication methods
+
+### API key authentication
+
+The standard method shown above:
+
+```bash .env
+GRAPHRAG_API_KEY=your-azure-api-key
+```
+
+### Azure AD / Entra ID authentication
+
+For enhanced security, use Azure AD:
+
+```yaml settings.yaml
+llm:
+  type: chat
+  model_provider: azure
+  model: gpt-4o
+  deployment_name: gpt-4o
+  api_base: ${GRAPHRAG_API_BASE}
+  api_version: ${GRAPHRAG_API_VERSION}
+  # Use Azure AD token
+  authentication_type: azure_ad
+```
+
+<Tip>
+  Azure AD authentication requires the `azure-identity` Python package: `pip install azure-identity`
+</Tip>
+
+## Troubleshooting
+
+### Common issues
+
+<AccordionGroup>
+  <Accordion title="401 Unauthorized error">
+    **Cause:** Invalid API key or authentication failure
+    
+    **Solution:**
+    - Verify your API key in the Azure Portal
+    - Ensure the key is correctly set in `.env`
+    - Check that `api_base` matches your resource endpoint
+  </Accordion>
+  
+  <Accordion title="404 Not Found error">
+    **Cause:** Incorrect deployment name or endpoint
+    
+    **Solution:**
+    - Verify `deployment_name` matches your Azure deployment exactly
+    - Check that `api_base` ends with `/` or doesn't, based on API version
+    - Ensure the model is deployed in the same region as your endpoint
+  </Accordion>
+  
+  <Accordion title="429 Rate limit exceeded">
+    **Cause:** Exceeding Azure OpenAI quota
+    
+    **Solution:**
+    - Reduce `requests_per_minute` and `tokens_per_minute` in config
+    - Request quota increase in Azure Portal
+    - Implement retry logic with exponential backoff
+  </Accordion>
+  
+  <Accordion title="Model not found error">
+    **Cause:** Model not deployed or incorrect API version
+    
+    **Solution:**
+    - Deploy the model in Azure Portal
+    - Use API version `2024-02-15-preview` or later
+    - Match `model` parameter to your deployment name
+  </Accordion>
+</AccordionGroup>
+
+### Validation checklist
+
+- [ ] Azure OpenAI resource is created and active
+- [ ] Chat model (e.g., gpt-4o) is deployed
+- [ ] Embedding model (e.g., text-embedding-3-small) is deployed
+- [ ] API key is copied to `.env` file
+- [ ] `api_base` URL is correct
+- [ ] `deployment_name` matches Azure deployment exactly
+- [ ] `model_provider` is set to `azure`
+- [ ] Rate limits match your Azure quota
+- [ ] Dry run completes without errors
+
+## Example complete configuration
+
+Here's a complete working configuration for Azure:
+
+<CodeGroup>
+```yaml settings.yaml
+name: "azure-graphrag-project"
+
+logging:
+  directory: "output/logs"
+  filename: "app.log"
+
+llm:
+  type: chat
+  model_provider: azure
+  model: gpt-4o
+  deployment_name: gpt-4o
+  api_base: ${GRAPHRAG_API_BASE}
+  api_key: ${GRAPHRAG_API_KEY}
+  api_version: ${GRAPHRAG_API_VERSION}
+  requests_per_minute: 60
+  tokens_per_minute: 80000
+  max_tokens: 4000
+  temperature: 0.0
+  top_p: 1.0
+
+embedding:
+  type: embedding
+  model_provider: azure
+  model: text-embedding-3-small
+  deployment_name: text-embedding-3-small
+  api_base: ${GRAPHRAG_API_BASE}
+  api_key: ${GRAPHRAG_API_KEY}
+  api_version: ${GRAPHRAG_API_VERSION}
+  requests_per_minute: 60
+  tokens_per_minute: 150000
+
+chunking:
+  size: 300
+  overlap: 100
+  encoding_model: cl100k_base
+
+cache:
+  type: file
+  base_dir: ./cache
+
+snapshots:
+  graphml: true
+
+storage:
+  type: file
+  base_dir: ./output
+
+vector_store:
+  type: azure_ai_search
+  api_key: ${AZURE_SEARCH_API_KEY}
+  url: ${AZURE_SEARCH_URL}
+```
+
+```bash .env
+# Azure OpenAI Configuration
+GRAPHRAG_API_KEY=sk-your-azure-openai-key-here
+GRAPHRAG_API_BASE=https://your-resource.openai.azure.com/
+GRAPHRAG_API_VERSION=2024-02-15-preview
+
+# Azure AI Search Configuration (optional)
+AZURE_SEARCH_API_KEY=your-search-key-here
+AZURE_SEARCH_URL=https://your-search-service.search.windows.net
+```
+</CodeGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration reference" icon="gear" href="/configuration/overview">
+    Explore all configuration options
+  </Card>
+  <Card title="CLI usage" icon="terminal" href="/guides/cli-usage">
+    Learn GraphRAG commands
+  </Card>
+  <Card title="Best practices" icon="lightbulb" href="/guides/best-practices">
+    Optimize your implementation
+  </Card>
+  <Card title="Migration guide" icon="arrow-right-arrow-left" href="/guides/migration">
+    Upgrade between versions
+  </Card>
+</CardGroup>

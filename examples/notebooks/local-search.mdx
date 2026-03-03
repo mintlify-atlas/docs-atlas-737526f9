@@ -1,0 +1,549 @@
+---
+title: Local search notebook
+description: Interactive notebook for understanding and experimenting with local search
+---
+
+Local search generates answers by combining relevant knowledge graph data with text chunks from the original documents. This method is ideal for questions about specific entities or detailed information.
+
+<Note>
+This page references the [local_search.ipynb](https://github.com/microsoft/graphrag/blob/main/docs/examples_notebooks/local_search.ipynb) notebook from the GraphRAG repository.
+</Note>
+
+## When to use local search
+
+Local search excels at:
+
+- **Entity-specific questions** - "Who is Dr. Jordan Hayes?"
+- **Relationship queries** - "What is the connection between X and Y?"
+- **Detailed information** - "What are the properties of this concept?"
+- **Fact retrieval** - "When did this event occur?"
+
+## How local search works
+
+<Steps>
+  <Step title="Query embedding">
+    Your question is converted to an embedding vector.
+  </Step>
+  
+  <Step title="Entity retrieval">
+    Semantically similar entities are retrieved from the vector store.
+  </Step>
+  
+  <Step title="Context expansion">
+    Related relationships, text units, and community reports are gathered.
+  </Step>
+  
+  <Step title="Response generation">
+    The LLM synthesizes an answer from the assembled context.
+  </Step>
+</Steps>
+
+## Setting up the notebook
+
+### Import required libraries
+
+```python
+import os
+import pandas as pd
+from graphrag.query.context_builder.entity_extraction import EntityVectorStoreKey
+from graphrag.query.indexer_adapters import (
+    read_indexer_covariates,
+    read_indexer_entities,
+    read_indexer_relationships,
+    read_indexer_reports,
+    read_indexer_text_units,
+)
+from graphrag.query.question_gen.local_gen import LocalQuestionGen
+from graphrag.query.structured_search.local_search.mixed_context import (
+    LocalSearchMixedContext,
+)
+from graphrag.query.structured_search.local_search.search import LocalSearch
+from graphrag_vectors import IndexSchema, LanceDBVectorStore
+```
+
+### Configure paths
+
+```python
+INPUT_DIR = "./inputs/operation dulce"
+LANCEDB_URI = f"{INPUT_DIR}/lancedb"
+
+COMMUNITY_REPORT_TABLE = "community_reports"
+ENTITY_TABLE = "entities"
+COMMUNITY_TABLE = "communities"
+RELATIONSHIP_TABLE = "relationships"
+COVARIATE_TABLE = "covariates"
+TEXT_UNIT_TABLE = "text_units"
+COMMUNITY_LEVEL = 2
+```
+
+## Load data tables
+
+### Load entities
+
+```python
+# Read entity and community data
+entity_df = pd.read_parquet(f"{INPUT_DIR}/{ENTITY_TABLE}.parquet")
+community_df = pd.read_parquet(f"{INPUT_DIR}/{COMMUNITY_TABLE}.parquet")
+
+entities = read_indexer_entities(entity_df, community_df, COMMUNITY_LEVEL)
+
+# Connect to entity description embeddings
+description_embedding_store = LanceDBVectorStore(
+    index_schema=IndexSchema(index_name="default-entity-description")
+)
+description_embedding_store.connect(db_uri=LANCEDB_URI)
+
+print(f"Entity count: {len(entity_df)}")
+entity_df.head()
+```
+
+### Load relationships
+
+```python
+relationship_df = pd.read_parquet(f"{INPUT_DIR}/{RELATIONSHIP_TABLE}.parquet")
+relationships = read_indexer_relationships(relationship_df)
+
+print(f"Relationship count: {len(relationship_df)}")
+relationship_df.head()
+```
+
+### Load covariates (optional)
+
+```python
+# Covariates (claims) are optional and disabled by default
+covariate_df = pd.read_parquet(f"{INPUT_DIR}/{COVARIATE_TABLE}.parquet")
+claims = read_indexer_covariates(covariate_df)
+
+print(f"Claim records: {len(claims)}")
+covariates = {"claims": claims}
+```
+
+<Note>
+Covariates extract claims from your documents and generally require prompt tuning to be valuable. See the `GRAPHRAG_CLAIM_*` settings.
+</Note>
+
+### Load community reports
+
+```python
+report_df = pd.read_parquet(f"{INPUT_DIR}/{COMMUNITY_REPORT_TABLE}.parquet")
+reports = read_indexer_reports(report_df, community_df, COMMUNITY_LEVEL)
+
+print(f"Report records: {len(report_df)}")
+report_df.head()
+```
+
+### Load text units
+
+```python
+text_unit_df = pd.read_parquet(f"{INPUT_DIR}/{TEXT_UNIT_TABLE}.parquet")
+text_units = read_indexer_text_units(text_unit_df)
+
+print(f"Text unit records: {len(text_unit_df)}")
+text_unit_df.head()
+```
+
+## Configure language models
+
+<CodeGroup>
+  ```python Chat and embedding models
+  from graphrag.config.enums import ModelType
+  from graphrag.config.models.language_model_config import LanguageModelConfig
+  from graphrag.language_model.manager import ModelManager
+  from graphrag.tokenizer.get_tokenizer import get_tokenizer
+  
+  api_key = os.environ["GRAPHRAG_API_KEY"]
+  
+  # Chat model configuration
+  chat_config = LanguageModelConfig(
+      api_key=api_key,
+      type=ModelType.Chat,
+      model_provider="openai",
+      model="gpt-4.1",
+      max_retries=20,
+  )
+  chat_model = ModelManager().get_or_create_chat_model(
+      name="local_search",
+      model_type=ModelType.Chat,
+      config=chat_config,
+  )
+  
+  # Embedding model configuration
+  embedding_config = LanguageModelConfig(
+      api_key=api_key,
+      type=ModelType.Embedding,
+      model_provider="openai",
+      model="text-embedding-3-small",
+      max_retries=20,
+  )
+  text_embedder = ModelManager().get_or_create_embedding_model(
+      name="local_search_embedding",
+      model_type=ModelType.Embedding,
+      config=embedding_config,
+  )
+  
+  tokenizer = get_tokenizer(chat_config)
+  ```
+</CodeGroup>
+
+## Create local search context builder
+
+```python
+context_builder = LocalSearchMixedContext(
+    community_reports=reports,
+    text_units=text_units,
+    entities=entities,
+    relationships=relationships,
+    covariates=covariates,  # Set to None if not using claims
+    entity_text_embeddings=description_embedding_store,
+    embedding_vectorstore_key=EntityVectorStoreKey.ID,
+    text_embedder=text_embedder,
+    tokenizer=tokenizer,
+)
+```
+
+<Note>
+If you use entity titles as vector store IDs, set `embedding_vectorstore_key=EntityVectorStoreKey.TITLE`.
+</Note>
+
+## Configure search parameters
+
+<Tabs>
+  <Tab title="Context parameters">
+    ```python
+    local_context_params = {
+        "text_unit_prop": 0.5,  # 50% of context for text chunks
+        "community_prop": 0.1,  # 10% for community reports
+        # Remaining 40% for entities and relationships
+        
+        "conversation_history_max_turns": 5,
+        "conversation_history_user_turns_only": True,
+        
+        "top_k_mapped_entities": 10,  # Top entities from vector search
+        "top_k_relationships": 10,  # Related relationships to include
+        
+        "include_entity_rank": True,  # Include node degree
+        "include_relationship_weight": True,
+        "include_community_rank": False,
+        
+        "return_candidate_context": False,  # Debug mode
+        "embedding_vectorstore_key": EntityVectorStoreKey.ID,
+        
+        "max_tokens": 12_000,  # Total context window
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Model parameters">
+    ```python
+    model_params = {
+        "max_tokens": 2_000,  # Response length
+        "temperature": 0.0,  # Deterministic
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Create search engine
+
+```python
+search_engine = LocalSearch(
+    model=chat_model,
+    context_builder=context_builder,
+    tokenizer=tokenizer,
+    model_params=model_params,
+    context_builder_params=local_context_params,
+    response_type="multiple paragraphs",
+)
+```
+
+## Run queries
+
+### Basic queries
+
+<CodeGroup>
+  ```python Agent Mercer
+  result = await search_engine.search("Tell me about Agent Mercer")
+  print(result.response)
+  ```
+  
+  ```python Dr. Jordan Hayes
+  question = "Tell me about Dr. Jordan Hayes"
+  result = await search_engine.search(question)
+  print(result.response)
+  ```
+</CodeGroup>
+
+### Inspect context data
+
+See which entities, relationships, and sources were used:
+
+<Tabs>
+  <Tab title="Entities">
+    ```python
+    result.context_data["entities"].head()
+    ```
+  </Tab>
+  
+  <Tab title="Relationships">
+    ```python
+    result.context_data["relationships"].head()
+    ```
+  </Tab>
+  
+  <Tab title="Community reports">
+    ```python
+    if "reports" in result.context_data:
+        result.context_data["reports"].head()
+    ```
+  </Tab>
+  
+  <Tab title="Source chunks">
+    ```python
+    result.context_data["sources"].head()
+    ```
+  </Tab>
+  
+  <Tab title="Claims">
+    ```python
+    if "claims" in result.context_data:
+        print(result.context_data["claims"].head())
+    ```
+  </Tab>
+</Tabs>
+
+## Question generation
+
+Generate follow-up questions based on conversation history:
+
+```python
+question_generator = LocalQuestionGen(
+    model=chat_model,
+    context_builder=context_builder,
+    tokenizer=tokenizer,
+    model_params=model_params,
+    context_builder_params=local_context_params,
+)
+
+question_history = [
+    "Tell me about Agent Mercer",
+    "What happens in Dulce military base?",
+]
+
+candidate_questions = await question_generator.agenerate(
+    question_history=question_history,
+    context_data=None,
+    question_count=5
+)
+
+print(candidate_questions.response)
+```
+
+## Example queries
+
+<AccordionGroup>
+  <Accordion title="Entity information">
+    ```python
+    queries = [
+        "Who is Agent Mercer and what is their role?",
+        "Tell me about Dr. Jordan Hayes",
+        "What is the Dulce military base?",
+    ]
+    
+    for query in queries:
+        result = await search_engine.search(query)
+        print(f"Q: {query}")
+        print(f"A: {result.response}\n")
+    ```
+  </Accordion>
+  
+  <Accordion title="Relationship queries">
+    ```python
+    result = await search_engine.search(
+        "What is the relationship between Agent Mercer and Dr. Hayes?"
+    )
+    print(result.response)
+    
+    # Inspect supporting relationships
+    print(result.context_data["relationships"])
+    ```
+  </Accordion>
+  
+  <Accordion title="Multi-hop reasoning">
+    ```python
+    result = await search_engine.search(
+        "How are the different organizations connected through their members?"
+    )
+    print(result.response)
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Tuning parameters
+
+### Context allocation
+
+Adjust the proportion of context dedicated to different data types:
+
+```python
+# More emphasis on original text
+local_context_params["text_unit_prop"] = 0.7
+local_context_params["community_prop"] = 0.1
+# 20% for entities and relationships
+
+# More emphasis on graph structure
+local_context_params["text_unit_prop"] = 0.3
+local_context_params["community_prop"] = 0.2
+# 50% for entities and relationships
+```
+
+### Entity retrieval
+
+```python
+# Retrieve more entities for comprehensive coverage
+local_context_params["top_k_mapped_entities"] = 20
+local_context_params["top_k_relationships"] = 20
+
+# Focus on fewer, most relevant entities
+local_context_params["top_k_mapped_entities"] = 5
+local_context_params["top_k_relationships"] = 5
+```
+
+### Debug mode
+
+Enable candidate context to see what was considered:
+
+```python
+local_context_params["return_candidate_context"] = True
+
+result = await search_engine.search("Your question")
+
+# View all candidate entities (in_context column shows if used)
+candidate_entities = result.context_data["entities"]
+print(f"Total candidates: {len(candidate_entities)}")
+print(f"Used in context: {candidate_entities['in_context'].sum()}")
+```
+
+## Performance optimization
+
+<CardGroup cols={2}>
+  <Card title="Reduce context size" icon="compress">
+    Lower `max_tokens` for faster responses
+    ```python
+    max_tokens=8000
+    ```
+  </Card>
+  
+  <Card title="Limit entity retrieval" icon="filter">
+    Reduce `top_k_mapped_entities`
+    ```python
+    top_k_mapped_entities=5
+    ```
+  </Card>
+  
+  <Card title="Skip community reports" icon="gauge">
+    Set community proportion to 0
+    ```python
+    community_prop=0.0
+    ```
+  </Card>
+  
+  <Card title="Use conversation history" icon="clock-rotate-left">
+    Enable for context-aware follow-ups
+    ```python
+    conversation_history_max_turns=5
+    ```
+  </Card>
+</CardGroup>
+
+## Advanced features
+
+### Conversation history
+
+```python
+# First question
+result1 = await search_engine.search("Who is Agent Mercer?")
+print(result1.response)
+
+# Follow-up leveraging history
+result2 = await search_engine.search(
+    "What are their main relationships?",
+    conversation_history=[
+        {"role": "user", "content": "Who is Agent Mercer?"},
+        {"role": "assistant", "content": result1.response},
+    ]
+)
+print(result2.response)
+```
+
+### Custom response types
+
+```python
+response_types = [
+    "single paragraph",
+    "bullet points",
+    "detailed analysis",
+    "timeline",
+    "list of key points",
+]
+
+search_engine.response_type = "bullet points"
+result = await search_engine.search("What are Agent Mercer's key activities?")
+```
+
+## Comparison with global search
+
+| Aspect | Local Search | Global Search |
+|--------|--------------|---------------|
+| **Question Type** | Specific, detailed | High-level, broad |
+| **Data Source** | Entities + text chunks + reports | Community reports only |
+| **Cost** | Lower | Higher |
+| **Response Time** | Faster | Slower |
+| **Best For** | Entity details, facts | Themes, summaries |
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Empty or irrelevant results">
+    Solutions:
+    - Increase `top_k_mapped_entities` for broader retrieval
+    - Check if entities exist in your knowledge graph
+    - Verify embedding model matches indexing model
+    - Increase `text_unit_prop` for more context
+  </Accordion>
+  
+  <Accordion title="Token limit exceeded">
+    Solutions:
+    - Reduce `max_tokens` in context parameters
+    - Lower `top_k_mapped_entities` and `top_k_relationships`
+    - Decrease `text_unit_prop`
+    - Use a model with larger context window
+  </Accordion>
+  
+  <Accordion title="Slow performance">
+    Solutions:
+    - Reduce context size parameters
+    - Disable community reports if not needed
+    - Use faster embedding model
+    - Cache frequent queries
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Global search" icon="globe" href="/examples/notebooks/global-search">
+    Learn about global search for dataset-wide questions
+  </Card>
+  
+  <Card title="DRIFT search" icon="route" href="/examples/notebooks/drift-search">
+    Explore dynamic iterative search
+  </Card>
+  
+  <Card title="Search comparison" icon="code-compare" href="/examples/notebooks/comparison">
+    Compare all search methods side-by-side
+  </Card>
+  
+  <Card title="Query guide" icon="book" href="/query/local-search">
+    Complete local search documentation
+  </Card>
+</CardGroup>

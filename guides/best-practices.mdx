@@ -1,0 +1,807 @@
+---
+title: Best practices
+description: Optimize your GraphRAG implementation for quality, performance, and cost-effectiveness
+---
+
+This guide covers proven strategies for getting the best results from GraphRAG, including configuration optimization, cost management, and workflow recommendations.
+
+## Before you start
+
+<Warning>
+  GraphRAG indexing can be expensive. Always start small, test thoroughly, and understand costs before scaling to production datasets.
+</Warning>
+
+### Initial testing strategy
+
+<Steps>
+  <Step title="Start with a small dataset">
+    Begin with 5-10 representative documents:
+    
+    ```bash
+    # Copy a small sample to test
+    mkdir ./test-project/input
+    cp ~/documents/sample*.txt ./test-project/input/
+    ```
+  </Step>
+  
+  <Step title="Use affordable models for testing">
+    During development, use cost-effective models:
+    
+    ```yaml settings.yaml
+    llm:
+      model: gpt-3.5-turbo  # or gpt-4o-mini
+    
+    embedding:
+      model: text-embedding-3-small
+    ```
+  </Step>
+  
+  <Step title="Enable caching">
+    Always enable caching to avoid redundant API calls:
+    
+    ```yaml settings.yaml
+    cache:
+      type: file
+      base_dir: ./cache
+    ```
+  </Step>
+  
+  <Step title="Run dry-run first">
+    Validate configuration before indexing:
+    
+    ```bash
+    graphrag index --root ./test-project --dry-run --verbose
+    ```
+  </Step>
+</Steps>
+
+## Prompt tuning
+
+<Tip>
+  **Always run prompt tuning** before indexing your full dataset. Generic prompts rarely yield optimal results for domain-specific data.
+</Tip>
+
+### When to tune prompts
+
+- **New domain**: Medical, legal, scientific, business data
+- **Specialized terminology**: Industry-specific jargon or concepts
+- **Non-English content**: Different language or mixed languages
+- **Specific entity types**: You know what entities matter for your use case
+
+### Tuning workflow
+
+<Steps>
+  <Step title="Prepare representative data">
+    Select documents that represent your full dataset:
+    
+    ```bash
+    # Random sampling
+    ls ~/all-documents/*.txt | shuf -n 20 | xargs -I {} cp {} ./project/input/
+    ```
+  </Step>
+  
+  <Step title="Run prompt tuning">
+    ```bash
+    graphrag prompt-tune \
+      --root ./project \
+      --domain "medical research" \
+      --selection-method auto \
+      --n-subset-max 300 \
+      --language "English"
+    ```
+    
+    For large datasets, use `--selection-method auto` with k-means clustering.
+  </Step>
+  
+  <Step title="Review generated prompts">
+    Check `./project/prompts/` for:
+    - Entity types discovered
+    - Example extractions
+    - Domain-specific language
+  </Step>
+  
+  <Step title="Customize if needed">
+    Edit prompts to:
+    - Add missing entity types
+    - Adjust extraction instructions
+    - Improve examples
+  </Step>
+  
+  <Step title="Test on sample data">
+    Run indexing on a small sample to validate prompt quality:
+    
+    ```bash
+    graphrag index --root ./project --verbose
+    ```
+  </Step>
+</Steps>
+
+### Prompt tuning parameters
+
+<AccordionGroup>
+  <Accordion title="Selection methods">
+    **Random** (default):
+    - Fast and simple
+    - Good for uniform datasets
+    - Use with `--limit 15-20`
+    
+    **Top**:
+    - Uses first N documents
+    - Good when documents are pre-sorted
+    - Use with `--limit 15-20`
+    
+    **Auto** (recommended for large datasets):
+    - Uses k-means clustering
+    - Selects representative documents
+    - Use with `--n-subset-max 300` and `--k 15`
+  </Accordion>
+  
+  <Accordion title="Domain specification">
+    Be specific but not overly narrow:
+    
+    ✓ Good:
+    - "medical research papers"
+    - "corporate financial reports"
+    - "legal contracts and agreements"
+    
+    ✗ Too broad:
+    - "science"
+    - "business"
+    
+    ✗ Too narrow:
+    - "phase 3 clinical trials for oncology drugs"
+  </Accordion>
+  
+  <Accordion title="Language settings">
+    Specify the primary language of your content:
+    
+    ```bash
+    graphrag prompt-tune --language "Spanish"
+    graphrag prompt-tune --language "French"
+    graphrag prompt-tune --language "Japanese"
+    ```
+    
+    For multilingual datasets, choose the dominant language.
+  </Accordion>
+</AccordionGroup>
+
+## Configuration optimization
+
+### Model selection
+
+Choose models based on your requirements:
+
+<Tabs>
+  <Tab title="Development">
+    **Goal**: Fast iteration, low cost
+    
+    ```yaml
+    llm:
+      model: gpt-4o-mini
+      temperature: 0.0
+    
+    embedding:
+      model: text-embedding-3-small
+    ```
+    
+    **Cost**: ~$0.05-0.15 per 1000 documents
+  </Tab>
+  
+  <Tab title="Production">
+    **Goal**: High quality extractions
+    
+    ```yaml
+    llm:
+      model: gpt-4o
+      temperature: 0.0
+    
+    embedding:
+      model: text-embedding-3-small
+    ```
+    
+    **Cost**: ~$0.50-1.50 per 1000 documents
+  </Tab>
+  
+  <Tab title="High-end">
+    **Goal**: Best possible quality
+    
+    ```yaml
+    llm:
+      model: gpt-4o
+      temperature: 0.0
+    
+    embedding:
+      model: text-embedding-3-large
+    ```
+    
+    **Cost**: ~$0.75-2.00 per 1000 documents
+  </Tab>
+</Tabs>
+
+### Chunking configuration
+
+Optimize chunking for your document structure:
+
+```yaml settings.yaml
+chunking:
+  size: 300        # Tokens per chunk
+  overlap: 100     # Overlap between chunks
+  encoding_model: cl100k_base
+```
+
+**Guidelines**:
+
+| Document Type | Chunk Size | Overlap | Rationale |
+|---------------|-----------|---------|----------|
+| Short articles | 200 | 50 | Preserve complete thoughts |
+| Long reports | 300-400 | 100 | Balance context and granularity |
+| Technical docs | 400-500 | 100-150 | Keep technical concepts together |
+| Transcripts | 300 | 100 | Natural conversation flow |
+| Legal documents | 500 | 150 | Maintain clause integrity |
+
+<Tip>
+  Larger chunks mean fewer LLM calls (lower cost) but may reduce extraction granularity. Start with 300 and adjust based on results.
+</Tip>
+
+### Entity extraction settings
+
+```yaml settings.yaml
+entity_extraction:
+  max_gleanings: 1  # Additional extraction passes
+  
+  # Optional: specify entity types
+  entity_types:
+    - PERSON
+    - ORGANIZATION
+    - LOCATION
+    - EVENT
+    - TECHNOLOGY
+```
+
+**max_gleanings** trade-offs:
+
+- **0**: Fastest, cheapest, lower recall
+- **1**: Recommended balance (default)
+- **2+**: Highest quality, expensive, diminishing returns
+
+<Warning>
+  Each gleaning pass doubles the cost of entity extraction. Only increase for critical use cases.
+</Warning>
+
+### Community detection
+
+```yaml settings.yaml
+community_reports:
+  max_report_length: 1500  # Tokens per community report
+```
+
+**Guidelines**:
+- **500-1000**: Brief summaries, lower cost
+- **1500**: Recommended default, balanced detail
+- **2000-3000**: Comprehensive reports, higher cost
+
+### Rate limiting
+
+Set appropriate rate limits to avoid throttling:
+
+```yaml settings.yaml
+llm:
+  requests_per_minute: 60
+  tokens_per_minute: 80000
+
+embedding:
+  requests_per_minute: 60
+  tokens_per_minute: 150000
+```
+
+<Tabs>
+  <Tab title="OpenAI">
+    **Free tier**:
+    - 3 RPM, 40,000 TPM (GPT-4)
+    - 5 RPM, 100,000 TPM (GPT-3.5)
+    
+    **Tier 1** ($5+ spent):
+    - 500 RPM, 80,000 TPM (GPT-4o)
+    - 3,500 RPM, 200,000 TPM (GPT-3.5)
+    
+    Set to 90% of your limit to be safe.
+  </Tab>
+  
+  <Tab title="Azure OpenAI">
+    Check your quota in Azure Portal:
+    - Resource → Quotas
+    - Note TPM limits per deployment
+    
+    Typical:
+    - 60 RPM, 80,000 TPM (GPT-4)
+    - 120 RPM, 240,000 TPM (GPT-3.5)
+    
+    Request increases if needed.
+  </Tab>
+</Tabs>
+
+## Cost management
+
+### Estimate costs before indexing
+
+Run a test with a small sample and extrapolate:
+
+```bash
+# Index 10 documents
+graphrag index --root ./test --verbose
+
+# Check logs for token usage
+grep "tokens" ./test/output/logs/app.log
+
+# Extrapolate: (tokens_used / 10) * total_documents * model_price
+```
+
+### Cost reduction strategies
+
+<CardGroup cols={2}>
+  <Card title="Enable caching" icon="database">
+    Prevents redundant LLM calls during re-indexing
+    
+    ```yaml
+    cache:
+      type: file
+      base_dir: ./cache
+    ```
+  </Card>
+  
+  <Card title="Larger chunks" icon="compress">
+    Fewer chunks = fewer LLM calls
+    
+    ```yaml
+    chunking:
+      size: 400
+    ```
+  </Card>
+  
+  <Card title="Reduce gleanings" icon="minus">
+    Each pass costs more
+    
+    ```yaml
+    entity_extraction:
+      max_gleanings: 0
+    ```
+  </Card>
+  
+  <Card title="Use cheaper models" icon="dollar-sign">
+    For development and testing
+    
+    ```yaml
+    llm:
+      model: gpt-4o-mini
+    ```
+  </Card>
+</CardGroup>
+
+### Cost tracking
+
+Monitor spending:
+
+- **OpenAI**: Check usage at [platform.openai.com/usage](https://platform.openai.com/usage)
+- **Azure**: Monitor costs in Azure Portal → Cost Management
+- **Local logs**: Track token counts in GraphRAG logs
+
+## Query optimization
+
+### Choose the right search method
+
+<Tabs>
+  <Tab title="Global Search">
+    **Best for**:
+    - Dataset-wide questions
+    - Theme identification
+    - Summarization
+    - Trend analysis
+    
+    **Example queries**:
+    - "What are the main themes?"
+    - "Summarize the key findings"
+    - "What trends appear across documents?"
+    
+    ```bash
+    graphrag query "What are the main themes?" --method global
+    ```
+  </Tab>
+  
+  <Tab title="Local Search">
+    **Best for**:
+    - Specific entity queries
+    - Relationship exploration
+    - Detailed information retrieval
+    
+    **Example queries**:
+    - "Tell me about John Smith"
+    - "What did the CEO say about revenue?"
+    - "How are these two companies related?"
+    
+    ```bash
+    graphrag query "Tell me about John Smith" --method local
+    ```
+  </Tab>
+  
+  <Tab title="DRIFT Search">
+    **Best for**:
+    - Complex queries needing both breadth and depth
+    - Multi-hop reasoning
+    - Comprehensive answers
+    
+    **Example queries**:
+    - "How do industry trends affect Company X?"
+    - "What role did Person Y play in Event Z?"
+    
+    ```bash
+    graphrag query "How do trends affect Company X?" --method drift
+    ```
+  </Tab>
+  
+  <Tab title="Basic Search">
+    **Best for**:
+    - Simple keyword lookup
+    - Quick searches
+    - Testing
+    
+    **Example queries**:
+    - "Find mentions of AI"
+    - "Where is machine learning discussed?"
+    
+    ```bash
+    graphrag query "Find mentions of AI" --method basic
+    ```
+  </Tab>
+</Tabs>
+
+### Community level selection
+
+```bash
+graphrag query "your question" --community-level 2
+```
+
+**Guidelines**:
+
+- **Level 0**: Entire dataset (very broad, expensive)
+- **Level 1**: Major themes (broad summaries)
+- **Level 2**: **Recommended default** (balanced granularity)
+- **Level 3+**: Fine-grained details (more specific)
+
+<Tip>
+  Start with level 2. Increase for more specific queries, decrease for very broad questions.
+</Tip>
+
+### Response type optimization
+
+Guide the format of responses:
+
+```bash
+# Concise answers
+graphrag query "question" --response-type "Single Sentence"
+
+# Structured output
+graphrag query "question" --response-type "List of 3-7 Points"
+
+# Detailed responses
+graphrag query "question" --response-type "Multiple Paragraphs"
+
+# Custom format
+graphrag query "question" --response-type "Executive summary with key metrics"
+```
+
+## Data preparation
+
+### Document formatting
+
+<AccordionGroup>
+  <Accordion title="Supported formats">
+    GraphRAG supports:
+    - Plain text (`.txt`)
+    - Markdown (`.md`)
+    - CSV (`.csv`)
+    - Other formats via custom loaders
+    
+    **Recommendation**: Convert documents to plain text or markdown for best results.
+  </Accordion>
+  
+  <Accordion title="Document structure">
+    Well-structured documents yield better results:
+    
+    ✓ **Good structure**:
+    ```markdown
+    # Document Title
+    
+    ## Section 1
+    
+    Content with clear paragraphs...
+    
+    ## Section 2
+    
+    More structured content...
+    ```
+    
+    ✗ **Poor structure**:
+    - No headings or sections
+    - Mixed formatting
+    - Excessive special characters
+    - Malformed text from PDF extraction
+  </Accordion>
+  
+  <Accordion title="Metadata inclusion">
+    Include relevant metadata in documents:
+    
+    ```markdown
+    ---
+    title: Research Paper Title
+    author: John Smith
+    date: 2024-01-15
+    category: Medical Research
+    ---
+    
+    # Main content...
+    ```
+    
+    GraphRAG can extract entities from metadata.
+  </Accordion>
+</AccordionGroup>
+
+### Data cleaning
+
+Clean your data before indexing:
+
+```python
+import re
+
+def clean_document(text: str) -> str:
+    # Remove excessive whitespace
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Remove page numbers
+    text = re.sub(r'Page \d+', '', text)
+    
+    # Fix common OCR errors
+    text = text.replace('l1', 'll')  # Example
+    
+    # Remove headers/footers
+    # ... custom logic
+    
+    return text.strip()
+```
+
+## Storage and scalability
+
+### Local vs. cloud storage
+
+<Tabs>
+  <Tab title="Local (File)">
+    **Best for**:
+    - Development
+    - Small datasets (&lt;10K documents)
+    - Testing
+    
+    ```yaml
+    storage:
+      type: file
+      base_dir: ./output
+    
+    vector_store:
+      type: lancedb
+      db_uri: ./lancedb
+    ```
+  </Tab>
+  
+  <Tab title="Cloud (Azure Blob)">
+    **Best for**:
+    - Production
+    - Large datasets
+    - Team collaboration
+    
+    ```yaml
+    storage:
+      type: blob
+      container_name: graphrag-output
+      connection_string: ${AZURE_STORAGE_CONNECTION_STRING}
+    
+    vector_store:
+      type: azure_ai_search
+      url: ${AZURE_SEARCH_URL}
+      api_key: ${AZURE_SEARCH_API_KEY}
+    ```
+  </Tab>
+</Tabs>
+
+### Large dataset handling
+
+For datasets with >10,000 documents:
+
+<Steps>
+  <Step title="Partition your data">
+    Split into logical groups:
+    
+    ```bash
+    input/
+      medical/
+      legal/
+      financial/
+    ```
+    
+    Index separately or together based on use case.
+  </Step>
+  
+  <Step title="Optimize chunking">
+    Use larger chunks to reduce total chunk count:
+    
+    ```yaml
+    chunking:
+      size: 400
+      overlap: 100
+    ```
+  </Step>
+  
+  <Step title="Use cloud storage">
+    Azure Blob + Azure AI Search for scalability.
+  </Step>
+  
+  <Step title="Implement incremental updates">
+    Use `graphrag update` for new documents:
+    
+    ```bash
+    graphrag update --root ./project
+    ```
+  </Step>
+</Steps>
+
+## Workflow best practices
+
+### Development workflow
+
+<Steps>
+  <Step title="Initial setup">
+    ```bash
+    graphrag init --root ./project
+    # Configure settings.yaml and .env
+    ```
+  </Step>
+  
+  <Step title="Small sample test">
+    ```bash
+    # 5-10 documents
+    graphrag index --root ./project --verbose
+    ```
+  </Step>
+  
+  <Step title="Prompt tuning">
+    ```bash
+    graphrag prompt-tune --root ./project --domain "your domain"
+    ```
+  </Step>
+  
+  <Step title="Validation">
+    ```bash
+    # Test queries
+    graphrag query "test question" --method global
+    graphrag query "test question" --method local
+    ```
+  </Step>
+  
+  <Step title="Iterate">
+    - Adjust configuration
+    - Refine prompts
+    - Test again
+  </Step>
+  
+  <Step title="Scale up">
+    ```bash
+    # Full dataset
+    graphrag index --root ./project --verbose
+    ```
+  </Step>
+</Steps>
+
+### Version control
+
+Track your GraphRAG configuration:
+
+```bash
+# .gitignore
+.env
+cache/
+output/
+lancedb/
+*.parquet
+*.log
+
+# Commit these
+settings.yaml
+prompts/
+input/  # Or use DVC for large files
+```
+
+### Monitoring and debugging
+
+Enable verbose logging during development:
+
+```bash
+graphrag index --root ./project --verbose
+```
+
+Check logs for:
+- Token usage
+- API errors
+- Extraction quality
+- Processing time
+
+```bash
+tail -f ./project/output/logs/app.log
+```
+
+## Common pitfalls
+
+<AccordionGroup>
+  <Accordion title="Not running prompt tuning">
+    **Problem**: Generic prompts produce poor extractions
+    
+    **Solution**: Always run `graphrag prompt-tune` for domain-specific data
+  </Accordion>
+  
+  <Accordion title="Skipping small-scale testing">
+    **Problem**: Expensive mistakes on full dataset
+    
+    **Solution**: Test with 5-10 documents first, validate results, then scale
+  </Accordion>
+  
+  <Accordion title="Ignoring rate limits">
+    **Problem**: API throttling, failed indexing
+    
+    **Solution**: Configure rate limits to 90% of your quota
+  </Accordion>
+  
+  <Accordion title="Disabling cache">
+    **Problem**: Redundant API calls cost money
+    
+    **Solution**: Always enable caching for development
+  </Accordion>
+  
+  <Accordion title="Using wrong search method">
+    **Problem**: Poor query results
+    
+    **Solution**: Match search method to query type (see query optimization)
+  </Accordion>
+  
+  <Accordion title="Poor document quality">
+    **Problem**: Garbage in, garbage out
+    
+    **Solution**: Clean and structure documents before indexing
+  </Accordion>
+</AccordionGroup>
+
+## Performance benchmarks
+
+Typical indexing performance:
+
+| Documents | Model | Chunks | Time | Cost |
+|-----------|-------|--------|------|------|
+| 100 | GPT-4o | ~2,000 | 15-30 min | $1-3 |
+| 1,000 | GPT-4o | ~20,000 | 2-4 hours | $10-30 |
+| 10,000 | GPT-4o | ~200,000 | 20-40 hours | $100-300 |
+
+<Warning>
+  These are rough estimates. Actual costs depend on document length, chunk size, gleanings, and model pricing.
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="CLI usage" icon="terminal" href="/guides/cli-usage">
+    Master the command-line interface
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration/overview">
+    Deep dive into settings
+  </Card>
+  <Card title="Prompt tuning" icon="wand-magic-sparkles" href="/prompt-tuning/overview">
+    Optimize prompts for your domain
+  </Card>
+  <Card title="Migration guide" icon="arrow-right-arrow-left" href="/guides/migration">
+    Upgrade between versions
+  </Card>
+</CardGroup>

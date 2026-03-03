@@ -1,0 +1,384 @@
+---
+title: Custom prompts
+description: Learn how to customize GraphRAG prompts for domain-specific knowledge extraction
+---
+
+GraphRAG uses prompts to guide LLMs in extracting entities, relationships, and generating summaries. Customizing these prompts for your specific domain can significantly improve the quality and relevance of your knowledge graph.
+
+## Why customize prompts?
+
+Default prompts work well for general use cases, but domain-specific customization offers:
+
+- **Better entity recognition** - Identify domain-specific entities
+- **Improved relationship extraction** - Capture industry-specific connections
+- **Domain-aware summaries** - Generate contextually relevant reports
+- **Reduced hallucinations** - Focus on relevant information
+
+## Prompt tuning methods
+
+GraphRAG offers two approaches to prompt customization:
+
+<CardGroup cols={2}>
+  <Card title="Auto tuning" icon="wand-magic-sparkles">
+    Automatically generates domain-adapted prompts using your data
+  </Card>
+  
+  <Card title="Manual tuning" icon="pen-to-square">
+    Manually edit prompts for fine-grained control
+  </Card>
+</CardGroup>
+
+## Auto prompt tuning
+
+Auto tuning analyzes your input data and generates optimized prompts automatically.
+
+<Steps>
+  <Step title="Prepare your data">
+    Place your domain-specific documents in the `input/` directory:
+    
+    ```bash
+    cp your-documents/*.txt ./input/
+    ```
+  </Step>
+
+  <Step title="Run auto tuning">
+    Execute the auto-tuning command:
+    
+    ```bash
+    graphrag prompt-tune \
+      --root . \
+      --config ./settings.yaml \
+      --no-entity-types \
+      --output ./prompts
+    ```
+    
+    <Note>
+    Auto tuning will make several LLM calls to analyze your data. This may take a few minutes and consume API tokens.
+    </Note>
+  </Step>
+
+  <Step title="Review generated prompts">
+    Check the generated prompts in the `./prompts` directory:
+    
+    ```bash
+    ls -lh prompts/
+    ```
+    
+    You'll find:
+    - `entity_extraction.txt` - Entity extraction prompt
+    - `summarize_descriptions.txt` - Entity summarization prompt
+    - `community_report.txt` - Community report generation prompt
+  </Step>
+
+  <Step title="Update configuration">
+    Update `settings.yaml` to use the custom prompts:
+    
+    ```yaml
+    entity_extraction:
+      prompt: prompts/entity_extraction.txt
+    
+    summarize_descriptions:
+      prompt: prompts/summarize_descriptions.txt
+    
+    community_reports:
+      prompt: prompts/community_report.txt
+    ```
+  </Step>
+
+  <Step title="Re-index with custom prompts">
+    Run indexing again with your tuned prompts:
+    
+    ```bash
+    graphrag index --root .
+    ```
+  </Step>
+</Steps>
+
+## Manual prompt tuning
+
+For advanced use cases, you can manually edit prompts to have complete control.
+
+### Understanding prompt structure
+
+GraphRAG prompts follow a specific structure:
+
+<CodeGroup>
+  ```txt Entity extraction
+  -Goal-
+  Given a text document, identify all entities and their relationships.
+  
+  -Steps-
+  1. Identify all entities in the text
+  2. For each entity, extract relevant attributes
+  3. Identify relationships between entities
+  4. Format the output as specified
+  
+  -Entity Types-
+  - PERSON: Human individuals
+  - ORGANIZATION: Companies, institutions
+  - LOCATION: Physical or virtual places
+  - EVENT: Significant occurrences
+  
+  -Output Format-
+  Return a JSON object with entities and relationships.
+  ```
+  
+  ```txt Community report
+  -Goal-
+  Generate a comprehensive summary of a community in the knowledge graph.
+  
+  -Steps-
+  1. Analyze all entities in the community
+  2. Identify key themes and patterns
+  3. Summarize important relationships
+  4. Generate insights about the community's role
+  
+  -Format-
+  Create a structured report with:
+  - Title
+  - Summary
+  - Key findings
+  - Impact assessment
+  ```
+</CodeGroup>
+
+### Example: Customizing for medical domain
+
+<Steps>
+  <Step title="Create custom entity types">
+    Define domain-specific entities for medical documents:
+    
+    ```txt prompts/medical_entities.txt
+    -Goal-
+    Extract medical entities and relationships from clinical documents.
+    
+    -Entity Types-
+    - PATIENT: Individual receiving medical care
+    - CONDITION: Medical diagnosis or symptom
+    - MEDICATION: Drugs or treatments
+    - PROCEDURE: Medical interventions
+    - PROVIDER: Healthcare professionals
+    - FACILITY: Healthcare institutions
+    
+    -Relationship Types-
+    - TREATS: Medication treats condition
+    - DIAGNOSED_WITH: Patient has condition
+    - PRESCRIBED_BY: Provider prescribes medication
+    - PERFORMED_AT: Procedure at facility
+    
+    -Examples-
+    [Provide domain-specific examples here]
+    ```
+  </Step>
+
+  <Step title="Customize community reports">
+    Tailor community summaries for medical insights:
+    
+    ```txt prompts/medical_community_report.txt
+    -Goal-
+    Generate a medical community summary highlighting:
+    - Common conditions and treatments
+    - Treatment efficacy patterns
+    - Patient outcome trends
+    - Provider specializations
+    
+    -Report Structure-
+    # Community Medical Summary
+    
+    ## Overview
+    [Brief description of the medical community]
+    
+    ## Key Conditions
+    [Most prevalent diagnoses and symptoms]
+    
+    ## Treatment Patterns
+    [Common medications and procedures]
+    
+    ## Outcomes
+    [Success rates and patient progress]
+    ```
+  </Step>
+
+  <Step title="Update configuration">
+    Reference your custom prompts in `settings.yaml`:
+    
+    ```yaml
+    entity_extraction:
+      prompt: prompts/medical_entities.txt
+      entity_types: [PATIENT, CONDITION, MEDICATION, PROCEDURE, PROVIDER, FACILITY]
+    
+    community_reports:
+      prompt: prompts/medical_community_report.txt
+    ```
+  </Step>
+</Steps>
+
+## Domain-specific examples
+
+<Tabs>
+  <Tab title="Legal documents">
+    ```txt
+    -Entity Types-
+    - CASE: Legal cases and proceedings
+    - STATUTE: Laws and regulations
+    - PARTY: Plaintiffs, defendants, entities
+    - COURT: Judicial bodies
+    - LEGAL_CONCEPT: Legal principles and precedents
+    
+    -Relationship Types-
+    - CITES: Case cites statute or precedent
+    - PARTY_TO: Entity involved in case
+    - RULED_BY: Court ruling on case
+    - APPLIES: Statute applies to case
+    ```
+  </Tab>
+  
+  <Tab title="Scientific research">
+    ```txt
+    -Entity Types-
+    - RESEARCHER: Scientists and authors
+    - INSTITUTION: Research organizations
+    - CONCEPT: Scientific theories and methods
+    - EXPERIMENT: Research studies
+    - FINDING: Research results and discoveries
+    - CHEMICAL: Compounds and substances
+    
+    -Relationship Types-
+    - CONDUCTED_BY: Experiment performed by researcher
+    - AFFILIATED_WITH: Researcher at institution
+    - SUPPORTS: Finding supports concept
+    - USES: Experiment uses chemical
+    ```
+  </Tab>
+  
+  <Tab title="Business intelligence">
+    ```txt
+    -Entity Types-
+    - COMPANY: Business entities
+    - PRODUCT: Goods and services
+    - MARKET: Industry segments
+    - EXECUTIVE: Business leaders
+    - METRIC: Performance indicators
+    - STRATEGY: Business initiatives
+    
+    -Relationship Types-
+    - COMPETES_WITH: Company market competition
+    - OFFERS: Company provides product
+    - LEADS: Executive heads company
+    - TARGETS: Product targets market
+    ```
+  </Tab>
+</Tabs>
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Start with auto tuning" icon="bolt">
+    Begin with auto-generated prompts and refine manually as needed
+  </Card>
+  
+  <Card title="Provide examples" icon="lightbulb">
+    Include domain-specific examples in your prompts for better results
+  </Card>
+  
+  <Card title="Iterate and test" icon="rotate">
+    Test prompts on sample data and refine based on output quality
+  </Card>
+  
+  <Card title="Keep it focused" icon="bullseye">
+    Define specific entity types relevant to your domain, avoid being too broad
+  </Card>
+</CardGroup>
+
+## Testing custom prompts
+
+<Steps>
+  <Step title="Create test dataset">
+    Use a small, representative sample of your data:
+    
+    ```bash
+    mkdir test_input
+    cp input/sample*.txt test_input/
+    ```
+  </Step>
+
+  <Step title="Run indexing on test data">
+    Configure GraphRAG to use your test directory:
+    
+    ```bash
+    graphrag index --root ./test_workspace
+    ```
+  </Step>
+
+  <Step title="Evaluate results">
+    Review the generated entities and relationships:
+    
+    ```python
+    import pandas as pd
+    
+    entities = pd.read_parquet('./output/entities.parquet')
+    print(entities[['name', 'type', 'description']].head(20))
+    
+    relationships = pd.read_parquet('./output/relationships.parquet')
+    print(relationships[['source', 'target', 'description']].head(20))
+    ```
+  </Step>
+
+  <Step title="Refine and iterate">
+    Based on the results:
+    - Add missing entity types
+    - Clarify entity definitions
+    - Provide more specific examples
+    - Adjust relationship types
+  </Step>
+</Steps>
+
+## Advanced techniques
+
+### Few-shot learning
+
+Include examples directly in your prompts:
+
+```txt
+-Examples-
+Text: "Dr. Smith prescribed metformin to treat diabetes."
+Entities:
+- PROVIDER: Dr. Smith
+- MEDICATION: metformin
+- CONDITION: diabetes
+Relationships:
+- (Dr. Smith)-[PRESCRIBED]->(metformin)
+- (metformin)-[TREATS]->(diabetes)
+```
+
+### Chain-of-thought prompting
+
+Guide the LLM through reasoning steps:
+
+```txt
+-Reasoning Process-
+1. First, identify all named entities in the text
+2. Then, determine the type of each entity based on context
+3. Next, find relationships by analyzing entity interactions
+4. Finally, extract supporting evidence for each relationship
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Prompt tuning guide" icon="book" href="/prompt-tuning/overview">
+    Complete guide to prompt tuning
+  </Card>
+  
+  <Card title="Configuration reference" icon="sliders" href="/configuration/settings">
+    Full configuration options
+  </Card>
+  
+  <Card title="Global search notebook" icon="flask" href="/examples/notebooks/global-search">
+    Experiment with search parameters
+  </Card>
+  
+  <Card title="Use cases" icon="briefcase" href="/examples/use-cases/research-analysis">
+    Real-world examples
+  </Card>
+</CardGroup>

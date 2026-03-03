@@ -1,0 +1,345 @@
+---
+title: Knowledge graphs
+description: How GraphRAG extracts entities, relationships, and builds structured knowledge from unstructured text
+---
+
+Knowledge graphs are the foundation of GraphRAG's ability to reason about complex information. Unlike traditional RAG approaches that treat documents as unstructured text, GraphRAG uses LLMs to extract explicit entities and relationships, creating a structured graph representation of your data.
+
+## What is a knowledge graph?
+
+A knowledge graph is a structured representation of information where:
+
+- **Nodes** represent entities (people, places, organizations, events, concepts)
+- **Edges** represent relationships between entities
+- **Attributes** provide descriptive information about nodes and edges
+
+In GraphRAG, this structure enables sophisticated reasoning by making the connections between concepts explicit and traversable.
+
+<div style={{textAlign: 'center', margin: '2rem 0'}}>
+  <img src="/images/knowledge-graph-example.png" alt="Example of an LLM-generated knowledge graph" style={{maxWidth: '600px', width: '100%'}} />
+  <p style={{fontSize: '0.9rem', color: '#666', marginTop: '0.5rem'}}>An LLM-generated knowledge graph showing entities (circles) sized by degree, with colors representing community membership</p>
+</div>
+
+## Graph extraction process
+
+GraphRAG builds knowledge graphs through a multi-step extraction and refinement pipeline.
+
+### Entity extraction
+
+Entities are extracted from each text unit using LLM-based analysis. The extraction process identifies:
+
+<Tabs>
+  <Tab title="Entity attributes">
+    **Title**: The canonical name of the entity
+    ```python
+    "title": "Microsoft Corporation"
+    ```
+    
+    **Type**: The category of entity (configurable)
+    ```python
+    "type": "ORGANIZATION"
+    ```
+    
+    **Description**: Contextual information about the entity
+    ```python
+    "description": "A multinational technology company..."
+    ```
+    
+    **Text unit references**: Links back to source text
+    ```python
+    "text_unit_ids": ["unit_001", "unit_042", "unit_127"]
+    ```
+  </Tab>
+  
+  <Tab title="Entity types">
+    The extraction prompt can be configured to focus on specific entity types relevant to your domain:
+    
+    **Default types:**
+    - PERSON
+    - ORGANIZATION
+    - LOCATION
+    - EVENT
+    - CONCEPT
+    
+    **Custom types:**
+    You can define domain-specific entity types through prompt tuning:
+    - MEDICATION (healthcare)
+    - PROTEIN (biology)
+    - COMPONENT (engineering)
+    - LEGAL_CASE (law)
+    
+    <Info>
+      Entity type configuration is done through the `entity_types` parameter in the extraction config and can be refined using the prompt tuning process.
+    </Info>
+  </Tab>
+  
+  <Tab title="Implementation">
+    The entity extraction is implemented in the `extract_graph` workflow:
+    
+    ```python
+    # From extract_graph.py
+    extracted_entities, extracted_relationships = await extractor(
+        text_units=text_units,
+        text_column="text",
+        id_column="id",
+        model=extraction_model,
+        prompt=extraction_prompt,
+        entity_types=entity_types,
+        max_gleanings=max_gleanings,
+        num_threads=extraction_num_threads,
+    )
+    ```
+    
+    Each text unit is processed independently, then entities with the same title and type are merged across units.
+  </Tab>
+</Tabs>
+
+### Relationship extraction
+
+Relationships connect entities and capture the semantic connections in your data.
+
+<AccordionGroup>
+  <Accordion title="Relationship structure">
+    Each relationship contains:
+    
+    **Source entity**: The starting point of the relationship
+    ```json
+    "source": "Microsoft Corporation"
+    ```
+    
+    **Target entity**: The ending point of the relationship
+    ```json
+    "target": "Satya Nadella"
+    ```
+    
+    **Description**: The nature and context of the relationship
+    ```json
+    "description": "Satya Nadella is the CEO of Microsoft Corporation"
+    ```
+    
+    **Weight**: Strength or importance of the relationship (derived from frequency and context)
+    ```json
+    "weight": 8.5
+    ```
+    
+    **Text unit IDs**: Source references for the relationship
+    ```json
+    "text_unit_ids": ["unit_001", "unit_042"]
+    ```
+  </Accordion>
+  
+  <Accordion title="Relationship merging">
+    When the same relationship appears in multiple text units:
+    
+    1. **Collection**: All descriptions are gathered into a list
+    2. **Deduplication**: Identical descriptions are removed
+    3. **Summarization**: The LLM creates a single concise description capturing all distinct information
+    4. **Weight calculation**: Frequency and context determine relationship strength
+    
+    This ensures each entity pair has a single, comprehensive relationship description.
+  </Accordion>
+  
+  <Accordion title="Directional vs undirected">
+    - **Extraction**: Relationships are extracted with explicit direction (source → target)
+    - **Community detection**: The graph is treated as undirected for clustering
+    - **Querying**: Both directions are considered when traversing relationships
+    
+    ```python
+    # Edge normalization for community detection
+    lo = edge_df[["source", "target"]].min(axis=1)
+    hi = edge_df[["source", "target"]].max(axis=1)
+    edge_df["source"] = lo
+    edge_df["target"] = hi
+    edge_df.drop_duplicates(subset=["source", "target"], keep="last")
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Entity and relationship summarization
+
+After extraction, entities and relationships often have multiple descriptions from different text units. The summarization phase consolidates these:
+
+<Steps>
+  <Step title="Collect descriptions">
+    Entities and relationships with the same identity gather all their descriptions from different text units into lists.
+  </Step>
+  
+  <Step title="LLM summarization">
+    The summarization model receives all descriptions and generates a single concise summary that captures all distinct information:
+    
+    ```python
+    entity_summaries, relationship_summaries = await summarize_descriptions(
+        entities_df=extracted_entities,
+        relationships_df=extracted_relationships,
+        model=summarization_model,
+        max_summary_length=max_summary_length,
+        prompt=summarization_prompt,
+    )
+    ```
+  </Step>
+  
+  <Step title="Replace descriptions">
+    Original description lists are replaced with the summarized versions, creating clean, consistent descriptions across the knowledge graph.
+  </Step>
+</Steps>
+
+<Note>
+  Summarization is crucial for managing token counts in downstream queries and ensuring each entity/relationship has coherent, non-redundant descriptions.
+</Note>
+
+## Claim extraction (covariates)
+
+Beyond entities and relationships, GraphRAG can extract claims—factual statements about entities that may be time-bound.
+
+<Tabs>
+  <Tab title="What are claims?">
+    Claims (called "covariates" in the data model) are assertions about entities with specific properties:
+    
+    - **Subject**: The entity the claim is about
+    - **Object**: What is being claimed
+    - **Type**: Category of claim
+    - **Status**: Validity or confidence level
+    - **Start/End date**: Time bounds when applicable
+    - **Description**: Full context of the claim
+    - **Source references**: Links to supporting text units
+    
+    Example:
+    ```json
+    {
+      "subject": "Microsoft",
+      "object": "acquired GitHub",
+      "type": "ACQUISITION",
+      "status": "CONFIRMED",
+      "start_date": "2018-06-04",
+      "description": "Microsoft acquired GitHub for $7.5 billion"
+    }
+    ```
+  </Tab>
+  
+  <Tab title="When to use claims">
+    Claim extraction is **optional** and disabled by default because:
+    
+    - It requires prompt tuning to be effective for your domain
+    - It adds significant LLM costs
+    - Not all use cases benefit from time-bound factual statements
+    
+    **Good use cases:**
+    - Historical analysis requiring temporal tracking
+    - Fact verification and claim validation
+    - Event timeline reconstruction
+    - Tracking changes in entity attributes over time
+    
+    <Warning>
+      Enable claim extraction only after prompt tuning and when your use case specifically requires time-bound factual assertions.
+    </Warning>
+  </Tab>
+  
+  <Tab title="Configuration">
+    Claims are extracted in the `extract_covariates` workflow, separate from entity/relationship extraction:
+    
+    ```yaml
+    # In configuration
+    extract_covariates:
+      enabled: false  # Disabled by default
+      completion_model_id: "model-id"
+      prompt: "covariates_extraction_prompt"
+      max_gleanings: 1
+    ```
+    
+    The extraction analyzes the same text units but focuses on factual claims rather than graph structure.
+  </Tab>
+</Tabs>
+
+## Graph properties and metrics
+
+Once extracted, the knowledge graph has several important properties:
+
+### Entity ranking
+
+Entities are ranked by importance using graph metrics:
+
+- **Degree**: Number of relationships connected to the entity
+- **Centrality**: Position in the network (highly connected entities have higher centrality)
+- **Community membership**: Which communities the entity belongs to at different hierarchy levels
+
+```python
+# Entity model attributes
+rank: int = 1  # Higher rank = more important entity
+community_ids: list[str]  # Community memberships
+```
+
+Entity rank influences:
+- Prioritization in local search results
+- Size of nodes in graph visualizations
+- Context window allocation during retrieval
+
+### Graph structure
+
+The complete graph structure includes:
+
+<CardGroup cols={2}>
+  <Card title="Connectivity" icon="link">
+    Entities connected by relationships form a network where information can be traversed through multi-hop paths.
+  </Card>
+  
+  <Card title="Clustering" icon="diagram-nested">
+    Community detection reveals groups of densely connected entities, representing coherent topics or themes.
+  </Card>
+  
+  <Card title="Hierarchy" icon="sitemap">
+    Multiple levels of communities create a hierarchical organization from global themes to local clusters.
+  </Card>
+  
+  <Card title="Provenance" icon="file-lines">
+    Every entity and relationship maintains links to source text units and documents for verification.
+  </Card>
+</CardGroup>
+
+## From graph to retrieval
+
+The knowledge graph enables sophisticated retrieval strategies:
+
+1. **Entity-based entry points**: Queries identify relevant entities through semantic similarity
+2. **Graph traversal**: Related entities and relationships are retrieved by following edges
+3. **Community context**: Entities' community memberships provide broader thematic context
+4. **Multi-hop reasoning**: Connections can be followed multiple steps to gather comprehensive information
+
+<Info>
+  The next concept page on [community detection](/concepts/community-detection) explores how hierarchical clustering organizes the knowledge graph into meaningful structures.
+</Info>
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Entity type design">
+    - Start with general types (PERSON, ORGANIZATION, LOCATION)
+    - Use prompt tuning to identify domain-specific types
+    - Keep types consistent and well-defined
+    - Avoid too many types (5-10 is usually sufficient)
+  </Accordion>
+  
+  <Accordion title="Extraction quality">
+    - Use appropriate text unit sizes (1200 tokens default)
+    - Configure max_gleanings (1-2) for iterative refinement
+    - Tune prompts for your domain using the prompt tuning guide
+    - Review sample extractions before processing large datasets
+  </Accordion>
+  
+  <Accordion title="Graph validation">
+    - Check entity and relationship counts after extraction
+    - Review high-degree entities for quality
+    - Validate that relationships make semantic sense
+    - Ensure text unit references are preserved
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Indexing pipeline" href="/concepts/indexing-pipeline" icon="gears">
+    See how graph extraction fits into the full indexing workflow
+  </Card>
+  <Card title="Community detection" href="/concepts/community-detection" icon="users">
+    Learn how hierarchical clustering organizes the graph
+  </Card>
+</CardGroup>

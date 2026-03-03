@@ -1,0 +1,394 @@
+---
+title: Input formats
+description: Learn about supported input formats, schemas, and chunking strategies for GraphRAG indexing
+---
+
+GraphRAG supports several input formats to simplify ingesting your data. This page discusses the mechanics and features available for input files and text chunking.
+
+## Input loading and schema
+
+All input formats are loaded within GraphRAG and passed to the indexing pipeline as a `documents` DataFrame. This DataFrame has a row for each document using a shared column schema:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | str | ID of the document. Generated using a hash of the text content to ensure stability across runs. |
+| `text` | str | The full text of the document. |
+| `title` | str | Name of the document. Some formats allow this to be configured. |
+| `creation_date` | str | The creation date of the document, represented as an ISO8601 string. Harvested from the source file system. |
+| `metadata` | dict | Optional additional document metadata. |
+
+<Note>
+See the [outputs](/indexing/outputs) documentation for the final documents table schema saved to Parquet after pipeline completion.
+</Note>
+
+## Bring your own DataFrame
+
+GraphRAG's indexing API allows you to pass in your own pandas DataFrame and bypass all input loading/parsing.
+
+```python
+import pandas as pd
+from graphrag.api.index import build_index
+from graphrag.config.models.graph_rag_config import GraphRagConfig
+
+# Create your custom DataFrame
+documents = pd.DataFrame({
+    'id': ['doc1', 'doc2'],
+    'text': ['Document 1 text...', 'Document 2 text...'],
+    'title': ['Document 1', 'Document 2'],
+    'creation_date': ['2024-01-01T00:00:00Z', '2024-01-02T00:00:00Z'],
+    'metadata': [{}, {}]
+})
+
+config = GraphRagConfig.from_yaml("settings.yaml")
+
+# Pass your DataFrame to the indexer
+results = await build_index(
+    config=config,
+    input_documents=documents,  # Your custom DataFrame
+    verbose=True
+)
+```
+
+<Warning>
+You must ensure that your input DataFrame conforms to the schema described above. All chunking behavior will proceed the same way as with file-based inputs.
+</Warning>
+
+## Custom file handling
+
+GraphRAG uses an injectable `InputReader` provider class. You can implement any input file handling you want in a class that extends `InputReader` and register it with the `InputReaderFactory`.
+
+```python
+from graphrag.index.input import InputReader, InputReaderFactory
+import pandas as pd
+
+class PDFReader(InputReader):
+    """Custom PDF input reader."""
+    
+    async def read(self, path: str) -> pd.DataFrame:
+        # Your PDF parsing logic here
+        documents = []
+        # ... parse PDFs ...
+        return pd.DataFrame(documents)
+
+# Register your custom reader
+InputReaderFactory.register("pdf", PDFReader)
+```
+
+<Info>
+See the [architecture](/indexing/architecture) page for more info on the standard provider pattern.
+</Info>
+
+## Supported formats
+
+GraphRAG supports three file formats out-of-the-box, covering the overwhelming majority of use cases.
+
+<Tabs>
+  <Tab title="Plain text">
+    Plain text files (typically ending in `.txt` file extension).
+    
+    - The entire file contents become the `text` field
+    - The `title` is always the filename
+    - Simplest format for getting started
+    
+    **Example:**
+    ```txt article.txt
+    This is the content of my article.
+    It can span multiple lines and paragraphs.
+    ```
+    
+    **Configuration:**
+    ```yaml settings.yaml
+    input:
+      type: text
+      base_dir: "./input"
+    ```
+  </Tab>
+  
+  <Tab title="CSV">
+    CSV files (typically ending in `.csv` extension). Each row in a CSV file is treated as a single document.
+    
+    - Loaded using pandas' [`read_csv` method](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.read_csv.html)
+    - Multiple CSV files are concatenated into a single DataFrame
+    - Configurable `text_column` and `title_column`
+    
+    **Example:**
+    ```csv documents.csv
+    text,title,category
+    "First document content","Doc 1","research"
+    "Second document content","Doc 2","news"
+    ```
+    
+    **Configuration:**
+    ```yaml settings.yaml
+    input:
+      type: csv
+      base_dir: "./input"
+      text_column: text  # defaults to "text"
+      title_column: title  # optional
+      metadata: [category]  # optional metadata columns
+    ```
+    
+    <Note>
+    If you don't configure `text_column`, it defaults to "text". If `title_column` is not configured, the title will be the filename. If an "id" column is present, it will be used; otherwise the ID will be generated from the text hash.
+    </Note>
+  </Tab>
+  
+  <Tab title="JSON">
+    JSON files (typically ending in `.json` extension) containing structured objects.
+    
+    - Loaded using Python's [`json.loads` method](https://docs.python.org/3/library/json.html)
+    - Must be properly compliant JSON
+    - May contain a single object OR an array of objects at root
+    - Multiple files are concatenated
+    
+    **Example (single object):**
+    ```json article.json
+    {
+      "headline": "Breaking News",
+      "content": "This is the article content...",
+      "author": "John Doe"
+    }
+    ```
+    
+    **Example (array of objects):**
+    ```json articles.json
+    [
+      {
+        "headline": "Article 1",
+        "content": "Content 1..."
+      },
+      {
+        "headline": "Article 2",
+        "content": "Content 2..."
+      }
+    ]
+    ```
+    
+    **Configuration:**
+    ```yaml settings.yaml
+    input:
+      type: json
+      base_dir: "./input"
+      text_column: content
+      title_column: headline
+      metadata: [author]  # optional
+    ```
+    
+    <Warning>
+    The specialized JSONL format (one full JSON object per line, not in an array) is not currently supported.
+    </Warning>
+  </Tab>
+</Tabs>
+
+## Metadata
+
+With structured file formats (CSV and JSON), you can configure any number of columns to be added to a persisted `metadata` field in the DataFrame.
+
+### Configuration
+
+```yaml settings.yaml
+input:
+  metadata: [title, tag, author]  # List of column names to collect
+```
+
+If configured, the output `metadata` column will have a dict containing a key for each column and the value of that column for that document.
+
+### Example
+
+<Tabs>
+  <Tab title="Input">
+    **software.csv:**
+    ```csv
+    text,title,tag
+    My first program,Hello World,tutorial
+    An early space shooter game,Space Invaders,arcade
+    ```
+    
+    **settings.yaml:**
+    ```yaml
+    input:
+      metadata: [title, tag]
+    ```
+  </Tab>
+  
+  <Tab title="Output">
+    **Documents DataFrame:**
+    
+    | id | title | text | creation_date | metadata |
+    |----|-------|------|---------------|----------|
+    | (generated) | Hello World | My first program | (file date) | `{"title": "Hello World", "tag": "tutorial"}` |
+    | (generated) | Space Invaders | An early space shooter game | (file date) | `{"title": "Space Invaders", "tag": "arcade"}` |
+  </Tab>
+</Tabs>
+
+## Chunking and metadata
+
+As described on the [dataflow](/indexing/dataflow) page, documents are chunked into smaller "text units" for processing because document content size often exceeds the available context window for language models.
+
+### Chunking configuration
+
+```yaml settings.yaml
+chunks:
+  size: 1200  # Token count (default)
+  overlap: 100  # Overlap between chunks
+  prepend_metadata: false  # Whether to prepend metadata to each chunk
+```
+
+### Metadata prepending
+
+Imagine indexing a collection of news articles where each article starts with a headline and author. When documents are chunked, they are split evenly according to your configured chunk size.
+
+<Warning>
+**The problem:** Front matter at the beginning of the document (like headline and author) is **not copied to each chunk**. It only exists in the first chunk.
+</Warning>
+
+When you later retrieve those chunks for summarization, they may be missing shared information about the source document.
+
+### Solution: prepend metadata
+
+You can configure the chunker to copy metadata into each text chunk:
+
+<Steps>
+  <Step title="Configure metadata columns">
+    Specify which columns to include as metadata during document import.
+    
+    ```yaml settings.yaml
+    input:
+      metadata: [title, author]
+    ```
+  </Step>
+  
+  <Step title="Enable prepend_metadata">
+    Instruct the chunker to copy metadata to the start of every text chunk.
+    
+    ```yaml settings.yaml
+    chunks:
+      size: 100
+      overlap: 0
+      prepend_metadata: true
+    ```
+  </Step>
+</Steps>
+
+Metadata is copied as `key: value` pairs on new lines at the beginning of each chunk.
+
+## Chunking examples
+
+<Tabs>
+  <Tab title="Text files with metadata">
+    **Input files:**
+    
+    `US to lift most federal COVID-19 vaccine mandates.txt`:
+    ```
+    WASHINGTON (AP) The Biden administration will end most of the last remaining federal COVID-19 vaccine requirements next week when the national public health emergency for the coronavirus ends, the White House said Monday...
+    ```
+    
+    **Configuration:**
+    ```yaml settings.yaml
+    input:
+      type: text
+      metadata: [title]  # filename becomes metadata
+    
+    chunks:
+      size: 100
+      overlap: 0
+      prepend_metadata: true
+    ```
+    
+    **Result chunks:**
+    ```
+    Chunk 1:
+    title: US to lift most federal COVID-19 vaccine mandates.txt
+    WASHINGTON (AP) The Biden administration will end most of the last remaining federal COVID-19 vaccine requirements next week when the national public health emergency for the coronavirus ends, the White House said Monday. Vaccine requirements for federal workers and federal contractors...
+    
+    Chunk 2:
+    title: US to lift most federal COVID-19 vaccine mandates.txt
+    the deadly virus raged, and their end marks the latest display of how President Joe Biden's administration is moving to treat COVID-19 as a routine, endemic illness...
+    ```
+    
+    <Note>
+    The title (filename) is prepended to each chunk but **not included in the computed chunk size**.
+    </Note>
+  </Tab>
+  
+  <Tab title="JSON with overlap">
+    **Input file (article1.json):**
+    ```json
+    {
+      "headline": "US to lift most federal COVID-19 vaccine mandates",
+      "content": "WASHINGTON (AP) The Biden administration will end..."
+    }
+    ```
+    
+    **Configuration:**
+    ```yaml settings.yaml
+    input:
+      type: json
+      title_column: headline
+      text_column: content
+    
+    chunks:
+      size: 100
+      overlap: 10  # Last 10 tokens are shared between chunks
+    ```
+    
+    **Result chunks:**
+    ```
+    Chunk 1 (100 tokens):
+    WASHINGTON (AP) The Biden administration will end most of the last remaining federal COVID-19 vaccine requirements next week when the national public health emergency for the coronavirus ends...
+    
+    Chunk 2 (starts with 10 tokens from chunk 1):
+    ...federal government to promote vaccination as the deadly virus raged, and their end marks the latest display of how President Joe Biden's administration is moving to treat COVID-19...
+    ```
+    
+    <Info>
+    Overlap helps maintain context between chunks, especially useful for relationship extraction.
+    </Info>
+  </Tab>
+</Tabs>
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Choosing chunk size" icon="ruler">
+    - **1200 tokens (default):** Good balance for most use cases
+    - **300-600 tokens:** Better for precise entity extraction
+    - **50-100 tokens:** Recommended for FastGraphRAG
+    - Consider your model's context window
+  </Accordion>
+  
+  <Accordion title="Using metadata" icon="tags">
+    - Include metadata that provides context across all chunks
+    - Use `prepend_metadata` when chunks need document-level context
+    - Common metadata: title, author, date, category, source
+  </Accordion>
+  
+  <Accordion title="Choosing overlap" icon="object-intersect">
+    - **0 tokens:** Fastest processing, no redundancy
+    - **50-100 tokens:** Better context preservation
+    - **10-20%:** Good rule of thumb (e.g., 100 tokens for 1000 token chunks)
+  </Accordion>
+  
+  <Accordion title="File format selection" icon="file">
+    - **Text:** Simplest, best for unstructured content
+    - **CSV:** Best for structured data with metadata
+    - **JSON:** Best for complex nested metadata
+    - Use custom DataFrame for unsupported formats
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Outputs" icon="table" href="/indexing/outputs">
+    Learn about the Parquet output formats
+  </Card>
+  
+  <Card title="Data flow" icon="arrow-right-arrow-left" href="/indexing/dataflow">
+    See how inputs flow through the pipeline
+  </Card>
+  
+  <Card title="Configuration" icon="gear" href="/configuration/overview">
+    Configure all indexing parameters
+  </Card>
+</CardGroup>

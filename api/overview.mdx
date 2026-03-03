@@ -1,0 +1,156 @@
+---
+title: Python API overview
+description: Overview of the GraphRAG Python API for programmatic access
+---
+
+The GraphRAG Python API provides programmatic access to indexing, querying, and prompt tuning functionality. This API allows you to integrate GraphRAG capabilities directly into your Python applications.
+
+## Warning
+
+<Warning>
+This API is under development and may undergo changes in future releases. Backwards compatibility is not guaranteed at this time.
+</Warning>
+
+## Installation
+
+The Python API is included with the GraphRAG package:
+
+```bash
+pip install graphrag
+```
+
+## Core modules
+
+The API is organized into three main modules:
+
+### Indexing API
+
+Build knowledge graph indexes from your documents:
+
+```python
+from graphrag.api import build_index
+```
+
+The indexing API enables you to create and update knowledge graph indexes programmatically. See the [index API reference](/api/index) for details.
+
+### Query API
+
+Perform searches over your indexed knowledge graph:
+
+```python
+from graphrag.api import (
+    global_search,
+    local_search,
+    drift_search,
+    basic_search
+)
+```
+
+The query API provides four search methods with both standard and streaming variants. See the [query API reference](/api/query) for details.
+
+### Prompt tuning API
+
+Generate domain-specific prompts from your data:
+
+```python
+from graphrag.api import generate_indexing_prompts, DocSelectionType
+```
+
+The prompt tuning API automatically generates optimized prompts tailored to your specific domain and documents. See the [prompt tune API reference](/api/prompt-tune) for details.
+
+## Quick start
+
+Here's a basic workflow using the Python API:
+
+```python
+import asyncio
+import pandas as pd
+from graphrag.config.models.graph_rag_config import GraphRagConfig
+from graphrag.api import build_index, global_search
+
+async def main():
+    # Load configuration
+    config = GraphRagConfig.from_file("settings.yaml")
+    
+    # Build the index
+    results = await build_index(config=config)
+    
+    # Load indexed data
+    entities = pd.read_parquet("output/entities.parquet")
+    communities = pd.read_parquet("output/communities.parquet")
+    reports = pd.read_parquet("output/community_reports.parquet")
+    
+    # Perform a search
+    response, context = await global_search(
+        config=config,
+        entities=entities,
+        communities=communities,
+        community_reports=reports,
+        community_level=2,
+        dynamic_community_selection=False,
+        response_type="multiple paragraphs",
+        query="What are the main themes?"
+    )
+    
+    print(response)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Configuration
+
+All API functions require a `GraphRagConfig` object. You can create this from a YAML file:
+
+```python
+from graphrag.config.models.graph_rag_config import GraphRagConfig
+
+config = GraphRagConfig.from_file("settings.yaml")
+```
+
+Or construct it programmatically:
+
+```python
+from graphrag.config.models.graph_rag_config import GraphRagConfig
+
+config = GraphRagConfig(
+    # Configure your settings here
+)
+```
+
+## Data formats
+
+The API uses pandas DataFrames for data exchange. Indexed data is stored in Parquet format:
+
+- `entities.parquet` - Entity information
+- `communities.parquet` - Community structure
+- `community_reports.parquet` - Community summaries
+- `text_units.parquet` - Text chunks
+- `relationships.parquet` - Entity relationships
+- `covariates.parquet` - Claims and covariates (optional)
+
+## Error handling
+
+API functions may raise exceptions. Use try-except blocks for proper error handling:
+
+```python
+try:
+    response, context = await global_search(
+        config=config,
+        entities=entities,
+        communities=communities,
+        community_reports=reports,
+        community_level=2,
+        dynamic_community_selection=False,
+        response_type="multiple paragraphs",
+        query="What are the main themes?"
+    )
+except Exception as e:
+    print(f"Search failed: {e}")
+```
+
+## Next steps
+
+- [Index API reference](/api/index) - Build knowledge graph indexes
+- [Query API reference](/api/query) - Search your knowledge graph
+- [Prompt tune API reference](/api/prompt-tune) - Generate custom prompts

@@ -1,0 +1,258 @@
+---
+title: graphrag prompt-tune
+description: Generate custom prompts tuned to your domain and data
+---
+
+The `prompt-tune` command automatically generates domain-specific prompts by analyzing your input documents. This creates prompts that are better suited to your specific use case than the default generic prompts.
+
+## Usage
+
+```bash
+graphrag prompt-tune [OPTIONS]
+```
+
+## Options
+
+<ParamField path="--root" type="string" default="current directory">
+  The project root directory.
+  
+  **Aliases**: `-r`
+</ParamField>
+
+<ParamField path="--domain" type="string">
+  The domain your input data is related to. For example: "space science", "microbiology", "environmental news", "legal documents".
+  
+  If not specified, the domain will be automatically inferred from the input data.
+</ParamField>
+
+<ParamField path="--output" type="string" default="prompts">
+  The directory to save generated prompts to, relative to the project root directory.
+  
+  **Aliases**: `-o`
+</ParamField>
+
+<ParamField path="--selection-method" type="string" default="random">
+  The text chunk selection method for prompt generation.
+  
+  Available methods:
+  - `random` - Randomly select chunks (fastest)
+  - `top` - Select top chunks by order
+  - `auto` - Automatically select diverse chunks using embeddings (best quality)
+</ParamField>
+
+<ParamField path="--limit" type="integer" default="15">
+  The number of documents to load when `--selection-method` is `random` or `top`.
+</ParamField>
+
+<ParamField path="--n-subset-max" type="integer" default="300">
+  The number of text chunks to embed when `--selection-method=auto`. Higher values provide more diversity but take longer.
+</ParamField>
+
+<ParamField path="--k" type="integer" default="15">
+  The maximum number of documents to select from each centroid when `--selection-method=auto`.
+</ParamField>
+
+<ParamField path="--max-tokens" type="integer" default="2000">
+  The maximum token count for prompt generation examples.
+</ParamField>
+
+<ParamField path="--min-examples-required" type="integer" default="2">
+  The minimum number of examples to generate/include in the entity extraction prompt.
+</ParamField>
+
+<ParamField path="--chunk-size" type="integer" default="1200">
+  The size of each example text chunk in tokens. Overrides `chunking.size` in the configuration file.
+</ParamField>
+
+<ParamField path="--overlap" type="integer" default="100">
+  The overlap size for chunking documents in tokens. Overrides `chunking.overlap` in the configuration file.
+</ParamField>
+
+<ParamField path="--language" type="string">
+  The primary language used for inputs and outputs in GraphRAG prompts.
+  
+  Examples: "English", "Spanish", "French", "Japanese"
+  
+  If not specified, defaults to English.
+</ParamField>
+
+<ParamField path="--discover-entity-types" type="boolean" default="true">
+  Discover and extract unspecified entity types from the data.
+  
+  Use `--no-discover-entity-types` to disable and only use predefined entity types.
+</ParamField>
+
+<ParamField path="--verbose" type="boolean" default="false">
+  Run the prompt tuning pipeline with verbose logging.
+  
+  **Aliases**: `-v`
+</ParamField>
+
+## Examples
+
+### Basic prompt tuning
+
+Generate prompts with automatic domain inference:
+
+```bash
+graphrag prompt-tune
+```
+
+### Specify domain
+
+```bash
+graphrag prompt-tune --domain "medical research"
+```
+
+### Use auto selection for better quality
+
+```bash
+graphrag prompt-tune --selection-method auto
+```
+
+The `auto` selection method uses embeddings to select diverse, representative samples from your documents.
+
+### Customize output directory
+
+```bash
+graphrag prompt-tune --output custom_prompts
+```
+
+### Multilingual prompt generation
+
+```bash
+graphrag prompt-tune --language "Spanish" --domain "noticias políticas"
+```
+
+### Increase sample diversity
+
+```bash
+graphrag prompt-tune \
+  --selection-method auto \
+  --n-subset-max 500 \
+  --k 20
+```
+
+### Use predefined entity types only
+
+```bash
+graphrag prompt-tune --no-discover-entity-types
+```
+
+### Custom chunking parameters
+
+```bash
+graphrag prompt-tune \
+  --chunk-size 800 \
+  --overlap 200
+```
+
+### Verbose output
+
+```bash
+graphrag prompt-tune --verbose
+```
+
+## Generated prompts
+
+The prompt-tune command generates three customized prompt files:
+
+### extract_graph.txt
+
+Prompt for extracting entities and relationships from text. This is customized with:
+- Domain-specific entity types discovered from your data
+- Example extractions from your actual documents
+- Domain context and terminology
+
+### summarize_descriptions.txt
+
+Prompt for summarizing entity descriptions. Customized with:
+- Domain-specific summarization guidelines
+- Examples from your data
+
+### community_report.txt
+
+Prompt for generating community reports. Customized with:
+- Domain-appropriate report structure
+- Relevant analysis dimensions for your domain
+
+## How it works
+
+1. **Sample selection**: Selects representative text chunks from your documents using the specified selection method
+2. **Domain analysis**: Analyzes the samples to understand domain characteristics and terminology
+3. **Entity discovery**: Identifies domain-specific entity types present in your data
+4. **Example generation**: Creates few-shot examples by extracting entities from sample chunks
+5. **Prompt creation**: Generates prompts incorporating discovered entity types and examples
+
+## Selection methods
+
+### Random selection
+
+- Fastest method
+- Randomly samples chunks from documents
+- Good for homogeneous datasets
+- Use `--limit` to control sample size
+
+### Top selection
+
+- Selects first N chunks in order
+- Fast and deterministic
+- Good when early content is representative
+
+### Auto selection (recommended)
+
+- Uses embeddings to find diverse, representative samples
+- Creates embeddings for up to `--n-subset-max` chunks
+- Clusters chunks and selects up to `--k` from each cluster
+- Best quality but slower due to embedding generation
+- Recommended for heterogeneous datasets
+
+## Best practices
+
+1. **Use auto selection**: For best results, use `--selection-method auto` with adequate sample size
+2. **Specify domain**: Providing a domain helps generate more focused prompts
+3. **Diverse samples**: Ensure your input documents are representative of your full dataset
+4. **Review outputs**: Always review generated prompts before using them for indexing
+5. **Iterate**: Try different selection methods and parameters to find what works best
+
+## Customizing generated prompts
+
+After generation, you can manually edit the prompts in the output directory:
+
+1. Review the generated entity types and examples
+2. Add or remove entity types as needed
+3. Adjust the prompt instructions for your specific needs
+4. Test with a small index before running on full dataset
+
+## Using tuned prompts
+
+After generating prompts:
+
+1. Review the prompts in the `prompts/` directory (or your custom output directory)
+2. Copy them to your project's `prompts/` directory if using a custom output location
+3. Run indexing - it will automatically use the new prompts:
+   ```bash
+   graphrag index
+   ```
+
+## Performance considerations
+
+- **Auto selection**: Slower due to embedding generation but produces better quality
+- **Sample size**: Larger `--n-subset-max` values take longer but capture more diversity
+- **Token limits**: Higher `--max-tokens` allows for more examples but increases API costs
+
+## Error handling
+
+Common issues:
+
+- **No input documents**: Ensure documents exist in your `input/` directory
+- **API errors**: Check that your API key is configured in `.env`
+- **Insufficient samples**: Increase `--limit` or `--n-subset-max` if you get too few examples
+- **Language mismatch**: Ensure `--language` matches your document language
+
+## Next steps
+
+- [Review and customize generated prompts](/examples/custom-prompts)
+- [Run indexing with tuned prompts](/cli/index)
+- [Understand entity types](/concepts/knowledge-graphs)
+- [Configure prompt settings](/prompt-tuning/overview)

@@ -1,0 +1,222 @@
+---
+title: graphrag query
+description: Query a knowledge graph index using various search methods
+---
+
+The `query` command searches your knowledge graph index to answer questions using different retrieval strategies.
+
+## Usage
+
+```bash
+graphrag query "<your question>" [OPTIONS]
+```
+
+## Arguments
+
+<ParamField path="query" type="string" required>
+  The question or query to execute against the knowledge graph.
+</ParamField>
+
+## Options
+
+<ParamField path="--root" type="string" default="current directory">
+  The project root directory containing the configuration and index.
+  
+  **Aliases**: `-r`
+</ParamField>
+
+<ParamField path="--method" type="string" default="global">
+  The query algorithm to use.
+  
+  **Aliases**: `-m`
+  
+  Available methods:
+  - `global` - Best for questions about the entire dataset or high-level themes
+  - `local` - Best for specific entity-focused questions
+  - `drift` - Advanced multi-hop reasoning across communities
+  - `basic` - Simple similarity-based search over text chunks
+</ParamField>
+
+<ParamField path="--data" type="string">
+  Index output directory containing the parquet files. If not specified, uses the `output_storage.base_dir` from configuration.
+  
+  **Aliases**: `-d`
+</ParamField>
+
+<ParamField path="--community-level" type="integer" default="2">
+  Leiden hierarchy level from which to load community reports. Higher values represent smaller, more granular communities.
+  
+  Used by: `global`, `local`, and `drift` methods.
+</ParamField>
+
+<ParamField path="--dynamic-community-selection" type="boolean" default="false">
+  Use global search with dynamic community selection. This allows the search to adaptively select relevant communities.
+  
+  Use `--dynamic-community-selection` to enable.
+  
+  Only used by: `global` method.
+</ParamField>
+
+<ParamField path="--response-type" type="string" default="Multiple Paragraphs">
+  Free-form description of the desired response format.
+  
+  Examples:
+  - `"Single Sentence"`
+  - `"Multiple Paragraphs"`
+  - `"List of 3-7 Points"`
+  - `"Detailed Report"`
+  - `"Executive Summary"`
+</ParamField>
+
+<ParamField path="--streaming" type="boolean" default="false">
+  Print the response in a streaming manner as it's generated, rather than waiting for the complete response.
+  
+  Use `--streaming` to enable, `--no-streaming` to disable.
+</ParamField>
+
+<ParamField path="--verbose" type="boolean" default="false">
+  Run the query with verbose logging to see detailed processing information.
+  
+  **Aliases**: `-v`
+</ParamField>
+
+## Search methods
+
+### Global search
+
+Best for questions about overall themes, trends, or dataset-wide patterns.
+
+```bash
+graphrag query "What are the main themes in the dataset?" --method global
+```
+
+Global search:
+- Uses community reports at specified hierarchy level
+- Employs map-reduce approach to aggregate insights
+- Best for broad, thematic questions
+
+### Local search
+
+Best for questions about specific entities, events, or detailed information.
+
+```bash
+graphrag query "What is the role of John Smith?" --method local
+```
+
+Local search:
+- Focuses on specific entities and their neighborhoods
+- Uses entity embeddings to find relevant context
+- Best for targeted, specific questions
+
+### DRIFT search
+
+Advanced search using multi-hop reasoning across communities.
+
+```bash
+graphrag query "How do these technologies impact healthcare?" --method drift
+```
+
+DRIFT search:
+- Performs multi-hop reasoning across the graph
+- Explores multiple community levels
+- Best for complex analytical questions requiring deep reasoning
+
+### Basic search
+
+Simple similarity-based search over text chunks.
+
+```bash
+graphrag query "machine learning applications" --method basic
+```
+
+Basic search:
+- Uses text embeddings for similarity matching
+- Searches over raw text units
+- Best for simple retrieval or when you want direct text excerpts
+
+## Examples
+
+### Global search with custom response format
+
+```bash
+graphrag query "Summarize the key findings" \
+  --method global \
+  --response-type "List of 5-7 Points"
+```
+
+### Local search with streaming
+
+```bash
+graphrag query "Tell me about the Paris Agreement" \
+  --method local \
+  --streaming
+```
+
+### Query specific community level
+
+```bash
+graphrag query "What are the main topics?" \
+  --method global \
+  --community-level 1
+```
+
+Lower community levels (0, 1) contain broader, higher-level communities. Higher levels (2, 3+) contain more granular, specific communities.
+
+### Dynamic community selection
+
+```bash
+graphrag query "Explain the relationship between climate and economy" \
+  --method global \
+  --dynamic-community-selection
+```
+
+### Query with custom data directory
+
+```bash
+graphrag query "What patterns emerge?" \
+  --data ./custom_output \
+  --method global
+```
+
+### Verbose output for debugging
+
+```bash
+graphrag query "Tell me about innovation" \
+  --method local \
+  --verbose
+```
+
+## Response types
+
+The `--response-type` parameter is a free-form instruction that guides the LLM's response format:
+
+- **"Single Sentence"** - Concise one-sentence answer
+- **"Multiple Paragraphs"** - Detailed multi-paragraph response (default)
+- **"List of 3-7 Points"** - Bullet-point summary
+- **"Single Paragraph"** - Brief paragraph
+- **"Detailed Report"** - Comprehensive analysis
+- **"Executive Summary"** - High-level overview
+- **"Comparison Table"** - Structured comparison
+
+## Performance considerations
+
+- **Global search**: Processes community reports, faster than local for broad questions
+- **Local search**: Retrieves entity neighborhoods, can be slower for large graphs
+- **DRIFT search**: Most computationally intensive due to multi-hop reasoning
+- **Basic search**: Fastest method, simple vector similarity
+- **Streaming**: Recommended for long responses to see results incrementally
+
+## Output format
+
+By default, the query response is printed to stdout. When using `--verbose`, you'll also see:
+
+- Retrieved context information
+- Token usage statistics
+- Processing time
+- Search parameters used
+
+## Next steps
+
+- [Understand search methods](/concepts/retrieval-methods)
+- [Configure query settings](/query/overview)
+- [Optimize query performance](/guides/best-practices)

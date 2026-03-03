@@ -1,0 +1,521 @@
+---
+title: Community detection
+description: How hierarchical Leiden clustering organizes knowledge graphs into multi-level community structures with generated summaries
+---
+
+Community detection is a critical component of GraphRAG that organizes the knowledge graph into hierarchical clusters. This structure enables both global reasoning about dataset themes and efficient navigation through related information.
+
+## What is community detection?
+
+Community detection identifies groups of entities that are densely connected to each other but sparsely connected to entities in other groups. In GraphRAG, this reveals:
+
+- **Thematic clusters**: Groups of entities discussing related topics
+- **Organizational structure**: How information in your dataset is naturally organized
+- **Multiple granularities**: From broad themes to specific subtopics
+- **Navigation pathways**: How to traverse from global to local information
+
+<div style={{textAlign: 'center', margin: '2rem 0'}}>
+  <p style={{fontSize: '0.9rem', color: '#666'}}>In a knowledge graph visualization, each circle represents an entity sized by its degree (number of connections), and colors represent different community memberships.</p>
+</div>
+
+## The Leiden algorithm
+
+GraphRAG uses the Leiden algorithm, a state-of-the-art community detection method that improves upon the Louvain algorithm.
+
+### Why Leiden?
+
+<CardGroup cols={2}>
+  <Card title="Quality" icon="medal">
+    Leiden finds better-connected communities by addressing disconnected community issues in Louvain.
+  </Card>
+  <Card title="Scalability" icon="chart-line">
+    Efficient on large graphs with thousands of entities and relationships.
+  </Card>
+  <Card title="Hierarchical" icon="layer-group">
+    Naturally supports multi-level hierarchies through recursive application.
+  </Card>
+  <Card title="Deterministic" icon="lock">
+    Produces reproducible results with a fixed random seed.
+  </Card>
+</CardGroup>
+
+### Algorithm overview
+
+<Steps>
+  <Step title="Graph preparation">
+    The entity-relationship graph is converted to an undirected weighted graph:
+    
+    - **Nodes**: Entities from the knowledge graph
+    - **Edges**: Relationships between entities
+    - **Weights**: Relationship strength (based on frequency and context)
+    
+    ```python
+    # From cluster_graph.py
+    # Normalize edge direction (undirected graph)
+    lo = edge_df[["source", "target"]].min(axis=1)
+    hi = edge_df[["source", "target"]].max(axis=1)
+    edge_df["source"] = lo
+    edge_df["target"] = hi
+    edge_df.drop_duplicates(subset=["source", "target"], keep="last")
+    ```
+  </Step>
+  
+  <Step title="Optional LCC filtering">
+    If configured, extract only the largest connected component:
+    
+    ```python
+    if use_lcc:
+        edge_df = stable_lcc(edge_df)
+    ```
+    
+    This focuses clustering on the main graph, filtering out small disconnected components.
+  </Step>
+  
+  <Step title="Initial clustering">
+    The Leiden algorithm identifies communities by optimizing modularity—a measure of how well the graph is partitioned into communities.
+    
+    Communities are groups where:
+    - High edge density within the community
+    - Low edge density between communities
+  </Step>
+  
+  <Step title="Recursive refinement">
+    The algorithm is applied recursively to create hierarchy:
+    
+    1. Apply Leiden to create level 0 (leaf communities)
+    2. If any community exceeds max_cluster_size, subdivide it
+    3. Repeat until all leaf communities are below threshold
+    4. Create parent communities by aggregating children
+  </Step>
+</Steps>
+
+## Hierarchical Leiden implementation
+
+GraphRAG uses a custom hierarchical implementation built on the `graspologic_native` library:
+
+```python
+# From hierarchical_leiden.py
+def hierarchical_leiden(
+    edges: list[tuple[str, str, float]],
+    max_cluster_size: int = 10,
+    random_seed: int | None = 0xDEADBEEF,
+) -> list[HierarchicalCluster]:
+    """Run hierarchical leiden on an edge list."""
+    return gn.hierarchical_leiden(
+        edges=edges,
+        max_cluster_size=max_cluster_size,
+        seed=random_seed,
+        starting_communities=None,
+        resolution=1.0,
+        randomness=0.001,
+        use_modularity=True,
+        iterations=1,
+    )
+```
+
+### Key parameters
+
+<Tabs>
+  <Tab title="max_cluster_size">
+    **Default**: 10 entities
+    
+    Controls the maximum number of entities in leaf communities (level 0).
+    
+    **Effects:**
+    - **Smaller values** (5-10): More hierarchy levels, finer granularity, more detailed reports
+    - **Larger values** (20-50): Fewer levels, broader communities, less detailed reports
+    
+    **Considerations:**
+    - Smaller communities → more community reports → higher LLM costs
+    - Larger communities → broader summaries → may miss nuances
+    - Default of 10 balances detail with cost
+    
+    ```yaml
+    cluster_graph:
+      max_cluster_size: 10
+    ```
+  </Tab>
+  
+  <Tab title="use_lcc">
+    **Default**: true
+    
+    Whether to restrict clustering to the largest connected component.
+    
+    **When true:**
+    - Only the main connected component is clustered
+    - Small disconnected subgraphs are filtered out
+    - Results in more coherent communities
+    
+    **When false:**
+    - All entities are included, even disconnected ones
+    - May create many small, isolated communities
+    - Useful if disconnected components are meaningful
+    
+    ```yaml
+    cluster_graph:
+      use_lcc: true
+    ```
+  </Tab>
+  
+  <Tab title="seed">
+    **Default**: 0xDEADBEEF
+    
+    Random seed for reproducible clustering.
+    
+    **Importance:**
+    - Leiden has stochastic elements
+    - Same seed → same communities across runs
+    - Different seeds → slightly different communities
+    - Critical for reproducible pipelines
+    
+    ```yaml
+    cluster_graph:
+      seed: 0xDEADBEEF  # Or any integer
+    ```
+  </Tab>
+  
+  <Tab title="Advanced parameters">
+    Additional parameters in the implementation:
+    
+    **resolution** (1.0): Controls community size preference
+    - Higher values → more, smaller communities
+    - Lower values → fewer, larger communities
+    
+    **randomness** (0.001): Amount of randomness in optimization
+    - Very low → more deterministic
+    - Higher → more exploration of solution space
+    
+    **use_modularity** (true): Whether to optimize modularity metric
+    
+    **iterations** (1): Number of refinement iterations
+    
+    <Note>
+      These advanced parameters are currently hardcoded but could be exposed for fine-tuning in future versions.
+    </Note>
+  </Tab>
+</Tabs>
+
+## Community hierarchy structure
+
+The hierarchical clustering produces a tree structure of communities.
+
+### Hierarchy levels
+
+<AccordionGroup>
+  <Accordion title="Level 0: Leaf communities">
+    The most granular level containing individual entity groups.
+    
+    **Characteristics:**
+    - Maximum max_cluster_size entities per community
+    - Most detailed, specific topics
+    - Highest number of communities
+    - No children, only parents
+    
+    **Example:**
+    - Community 0: ["Microsoft", "Azure", "Cloud Computing"]
+    - Community 1: ["Python", "Pandas", "NumPy"]
+    - Community 2: ["GraphRAG", "Knowledge Graph", "RAG"]
+  </Accordion>
+  
+  <Accordion title="Level 1-N: Intermediate levels">
+    Mid-level communities that aggregate leaf communities.
+    
+    **Characteristics:**
+    - Aggregate multiple child communities
+    - Broader thematic groupings
+    - Both parent and children relationships
+    - Fewer communities than level 0
+    
+    **Example:**
+    - Community 10: Aggregates communities 0, 1, 2
+    - Topic: "Technology and Software"
+  </Accordion>
+  
+  <Accordion title="Top level: Root communities">
+    Highest-level communities representing major dataset themes.
+    
+    **Characteristics:**
+    - 1-5 communities typically
+    - Dataset-wide themes
+    - No parents, only children
+    - Most abstract summaries
+    
+    **Example:**
+    - Community 100: All technology-related entities
+    - Community 101: All business-related entities
+  </Accordion>
+</AccordionGroup>
+
+### Community data model
+
+Each community in the hierarchy contains:
+
+```python
+# From community.py
+@dataclass
+class Community:
+    id: str  # Unique identifier
+    title: str  # "Community {number}"
+    level: int  # Hierarchy level (0 = leaf)
+    
+    # Hierarchy relationships
+    parent: int  # Parent community ID (-1 for root)
+    children: list[int]  # Child community IDs (empty for leaves)
+    
+    # Content
+    entity_ids: list[str]  # Member entities
+    relationship_ids: list[str]  # Intra-community relationships
+    text_unit_ids: list[str]  # Associated text units
+    
+    # Metadata
+    size: int  # Number of entities
+    period: str  # Time period (for incremental updates)
+    attributes: dict  # Additional custom attributes
+```
+
+### Relationship aggregation
+
+Communities include only **intra-community relationships**—edges where both source and target are in the same community:
+
+```python
+# From create_communities.py
+# For each hierarchy level, find relationships within communities
+for level in communities["level"].unique():
+    level_comms = communities[communities["level"] == level]
+    
+    # Join relationships with community memberships
+    with_source = relationships.merge(level_comms, left_on="source", right_on="title")
+    with_both = with_source.merge(level_comms, left_on="target", right_on="title")
+    
+    # Keep only intra-community edges
+    intra = with_both[with_both["community_x"] == with_both["community_y"]]
+```
+
+This ensures each community has a self-contained subgraph.
+
+## Community summarization
+
+After communities are detected, LLM-generated summaries make them human-readable and useful for retrieval.
+
+### Report generation process
+
+<Steps>
+  <Step title="Gather community context">
+    For each community, collect all relevant information:
+    
+    - Entity titles, types, and descriptions
+    - Relationship descriptions
+    - Covariate/claim information (if available)
+    - Text unit excerpts
+    - Child community summaries (for non-leaf communities)
+  </Step>
+  
+  <Step title="Structure the prompt">
+    The community report prompt includes:
+    
+    - Community entities and their roles
+    - Key relationships and connections
+    - Important claims or facts
+    - Instructions for report structure
+  </Step>
+  
+  <Step title="Generate report">
+    The LLM creates a structured summary including:
+    
+    - **Title**: Descriptive name for the community
+    - **Summary**: Executive overview of the community
+    - **Key entities**: Most important entities and their significance
+    - **Findings**: Main insights and themes
+    - **Rating**: Importance score (1-10)
+  </Step>
+  
+  <Step title="Store and embed">
+    Reports are:
+    - Stored in the community_reports table
+    - Embedded for semantic search in global queries
+    - Linked to their community metadata
+  </Step>
+</Steps>
+
+### Bottom-up summarization
+
+<Info>
+  Community reports are generated bottom-up: leaf communities first, then progressively higher levels using child summaries as context.
+</Info>
+
+**Why bottom-up?**
+1. **Leaf communities**: Summarize raw entities and relationships
+2. **Parent communities**: Summarize child community reports (already condensed)
+3. **Coherence**: Each level builds on previous summaries
+4. **Efficiency**: Parent reports don't need to re-process all raw entities
+
+### Configuration
+
+```yaml
+community_reports:
+  # LLM settings
+  completion_model_id: "gpt-4-turbo"
+  
+  # Prompts
+  prompt: "community_report"  # From prompt registry
+  
+  # Size constraints
+  max_length: 2000  # Max tokens for generated report
+  max_input_tokens: 16000  # Context window for report generation
+  
+  # Processing
+  max_input_length: 16000  # Max community context size
+```
+
+## Using communities in retrieval
+
+Communities enable different search strategies:
+
+<Tabs>
+  <Tab title="Global search">
+    Uses community reports for dataset-wide reasoning:
+    
+    1. **Select hierarchy level**: Choose level based on desired granularity
+    2. **Retrieve reports**: Get all community reports at that level
+    3. **Map step**: Generate intermediate answers from each report
+    4. **Reduce step**: Aggregate intermediate answers into final response
+    
+    **Level selection:**
+    - **Root level**: Broad, high-level themes (faster, less detailed)
+    - **Mid level**: Balanced breadth and depth
+    - **Leaf level**: Most detailed (slower, more comprehensive)
+  </Tab>
+  
+  <Tab title="Local search">
+    Uses community memberships to expand context:
+    
+    1. **Find relevant entities**: Via semantic similarity to query
+    2. **Get entity communities**: Retrieve community IDs for each entity
+    3. **Expand to community members**: Include other entities in same communities
+    4. **Add community reports**: Include relevant community summaries
+    5. **Combine with text units**: Merge graph and text context
+  </Tab>
+  
+  <Tab title="DRIFT search">
+    Combines both approaches:
+    
+    1. **Primer**: Start with community reports (like global search)
+    2. **Follow-up**: Use local search to refine into specific questions
+    3. **Hierarchy**: Build question-answer tree using community structure
+    4. **Balance**: Leverages both global themes and local details
+  </Tab>
+</Tabs>
+
+## Analyzing community structure
+
+### Metrics to monitor
+
+<CardGroup cols={2}>
+  <Card title="Number of levels" icon="layer-group">
+    How many hierarchy levels were created.
+    
+    **Typical**: 2-4 levels
+    **Too many** (5+): max_cluster_size may be too small
+    **Too few** (1): max_cluster_size may be too large
+  </Card>
+  
+  <Card title="Communities per level" icon="diagram-nested">
+    Distribution of communities across levels.
+    
+    **Level 0**: Most communities (hundreds to thousands)
+    **Mid levels**: Fewer communities
+    **Root**: 1-5 communities
+  </Card>
+  
+  <Card title="Entity distribution" icon="circle-nodes">
+    How entities are distributed across communities.
+    
+    **Check for**:
+    - Communities with very few entities
+    - Unbalanced distribution
+    - Isolated entities
+  </Card>
+  
+  <Card title="Coverage" icon="percent">
+    Percentage of entities in communities.
+    
+    **High coverage** (>95%): Good graph connectivity
+    **Low coverage**: Many disconnected entities (consider use_lcc setting)
+  </Card>
+</CardGroup>
+
+### Quality indicators
+
+<AccordionGroup>
+  <Accordion title="Coherent communities">
+    Good communities have:
+    - Semantically related entities
+    - Dense internal connections
+    - Clear thematic focus
+    - Meaningful summaries
+    
+    Review sample community reports to assess coherence.
+  </Accordion>
+  
+  <Accordion title="Hierarchy coherence">
+    Good hierarchies have:
+    - Progressive abstraction from leaf to root
+    - Parent summaries that meaningfully aggregate children
+    - Clear thematic progression
+    
+    Compare reports at different levels for the same branch.
+  </Accordion>
+  
+  <Accordion title="Graph connectivity">
+    A well-connected graph produces better communities:
+    - Most entities in the largest connected component
+    - Few isolated nodes
+    - Balanced degree distribution
+    
+    Poor connectivity may indicate extraction issues.
+  </Accordion>
+</AccordionGroup>
+
+## Best practices
+
+<Steps>
+  <Step title="Start with defaults">
+    Use default settings (max_cluster_size=10, use_lcc=true) for initial runs.
+  </Step>
+  
+  <Step title="Analyze results">
+    Review:
+    - Number of communities at each level
+    - Sample community reports for coherence
+    - Entity distribution
+    - Hierarchy depth
+  </Step>
+  
+  <Step title="Tune if needed">
+    Adjust max_cluster_size based on:
+    - **Too broad**: Decrease max_cluster_size for finer granularity
+    - **Too fragmented**: Increase max_cluster_size for broader communities
+    - **Cost concerns**: Larger clusters = fewer reports = lower cost
+  </Step>
+  
+  <Step title="Consider use case">
+    **Global search heavy**: Optimize for good high-level summaries (larger clusters)
+    **Local search heavy**: Optimize for detailed leaf communities (smaller clusters)
+    **Both**: Use default balanced approach
+  </Step>
+</Steps>
+
+<Warning>
+  Changing community detection parameters requires re-running the entire indexing pipeline from Phase 4 onward.
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Retrieval methods" href="/concepts/retrieval-methods" icon="magnifying-glass">
+    Learn how communities enable global, local, and DRIFT search
+  </Card>
+  <Card title="Indexing pipeline" href="/concepts/indexing-pipeline" icon="gears">
+    See how community detection fits into the full workflow
+  </Card>
+</CardGroup>

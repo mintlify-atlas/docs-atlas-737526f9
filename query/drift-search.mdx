@@ -1,0 +1,365 @@
+---
+title: DRIFT search
+description: Learn how DRIFT search combines global and local search for dynamic reasoning
+icon: compass
+---
+
+DRIFT Search (Dynamic Reasoning and Inference with Flexible Traversal) combines characteristics of both global and local search to generate detailed responses while balancing computational costs with quality outcomes.
+
+## Overview
+
+GraphRAG uses large language models (LLMs) to create knowledge graphs and summaries from unstructured text, leveraging them to improve retrieval-augmented generation (RAG) operations. While global search provides comprehensive overviews and local search enables detailed exploration, DRIFT search introduces a hybrid approach that combines the strengths of both methods.
+
+<Info>
+**Key innovation:** DRIFT search includes community information in the search process, greatly expanding the breadth of the query's starting point and leading to retrieval and usage of a far higher variety of facts in the final answer.
+</Info>
+
+## How it works
+
+DRIFT search operates in three core phases:
+
+### Phase 1: Primer
+
+The primer phase establishes broad context using community reports:
+
+1. **Community selection**: Identifies the top K most semantically relevant community reports
+2. **Initial answer**: Generates a broad initial answer based on community-level insights
+3. **Question generation**: Creates follow-up questions to steer further exploration
+4. **Confidence scoring**: Assigns confidence scores to determine whether to continue exploration
+
+### Phase 2: Follow-up
+
+The follow-up phase uses local search to refine queries iteratively:
+
+1. **Local search execution**: Uses local search to answer each follow-up question
+2. **Intermediate answers**: Produces detailed intermediate answers with context-rich information
+3. **Question refinement**: Generates new follow-up questions that enhance specificity
+4. **Confidence tracking**: Monitors confidence levels to guide query expansion
+
+### Phase 3: Output hierarchy
+
+The final phase produces a hierarchical structure:
+
+1. **Hierarchical organization**: Questions and answers are organized hierarchically
+2. **Relevance ranking**: Results are ranked by relevance and confidence
+3. **Balanced insights**: Combines global insights with local refinements
+4. **Adaptive results**: Makes results comprehensive and adaptable to the query
+
+<Frame>
+  <img src="/img/drift-search-diagram.png" alt="DRIFT search process showing primer, follow-up, and output hierarchy phases" />
+</Frame>
+
+<Caption>
+Figure 1: An entire DRIFT search hierarchy highlighting the three core phases. (A) Primer: DRIFT compares the user's query with relevant community reports. (B) Follow-Up: DRIFT uses local search to refine queries. (C) Output Hierarchy: The final output is a hierarchical structure ranked by relevance.
+</Caption>
+
+## Configuration
+
+The `DRIFTSearch` class accepts the following key parameters:
+
+<ParamField path="model" type="LLMCompletion" required>
+  Language model chat completion object for response generation
+</ParamField>
+
+<ParamField path="context_builder" type="DRIFTSearchContextBuilder" required>
+  Context builder for preparing context data from community reports and query information
+</ParamField>
+
+<ParamField path="config" type="DRIFTSearchConfig" required>
+  Configuration model defining DRIFT search hyperparameters, including:
+  - Primer configuration (top-k reports, temperature, tokens)
+  - Local search parameters (text unit proportion, community proportion)
+  - Follow-up question limits and depth
+  - Confidence thresholds for expansion
+</ParamField>
+
+<ParamField path="tokenizer" type="Tokenizer" required>
+  Token encoder for tracking the budget for the algorithm
+</ParamField>
+
+<ParamField path="query_state" type="QueryState">
+  State object for tracking execution of a DRIFT search instance, including follow-ups and actions
+</ParamField>
+
+<ParamField path="callbacks" type="list[QueryCallbacks]">
+  Optional callback functions for custom event handlers during execution
+</ParamField>
+
+### DRIFT configuration options
+
+The `DRIFTSearchConfig` model includes:
+
+```python
+class DRIFTSearchConfig:
+    # Primer settings
+    primer_top_k_reports: int = 10
+    primer_temperature: float = 0.0
+    primer_max_tokens: int = 1000
+    
+    # Local search settings
+    local_search_text_unit_prop: float = 0.5
+    local_search_community_prop: float = 0.3
+    local_search_top_k_mapped_entities: int = 15
+    local_search_top_k_relationships: int = 20
+    local_search_max_data_tokens: int = 8000
+    local_search_temperature: float = 0.0
+    
+    # Follow-up settings
+    max_follow_up_questions: int = 5
+    max_search_depth: int = 3
+    confidence_threshold: float = 0.7
+```
+
+## API usage
+
+### Basic usage
+
+```python
+from graphrag.api import drift_search
+from graphrag.config import GraphRagConfig
+import pandas as pd
+
+# Load your configuration
+config = GraphRagConfig.from_file("settings.yaml")
+
+# Load your indexed data
+entities = pd.read_parquet("output/entities.parquet")
+communities = pd.read_parquet("output/communities.parquet")
+community_reports = pd.read_parquet("output/community_reports.parquet")
+text_units = pd.read_parquet("output/text_units.parquet")
+relationships = pd.read_parquet("output/relationships.parquet")
+
+# Perform DRIFT search
+response, context = await drift_search(
+    config=config,
+    entities=entities,
+    communities=communities,
+    community_reports=community_reports,
+    text_units=text_units,
+    relationships=relationships,
+    community_level=2,
+    response_type="Multiple Paragraphs",
+    query="What are the key research collaborations in the dataset?"
+)
+
+print(response)
+```
+
+### Streaming usage
+
+```python
+from graphrag.api import drift_search_streaming
+
+# Stream the response
+async for chunk in drift_search_streaming(
+    config=config,
+    entities=entities,
+    communities=communities,
+    community_reports=community_reports,
+    text_units=text_units,
+    relationships=relationships,
+    community_level=2,
+    response_type="Multiple Paragraphs",
+    query="What are the key research collaborations in the dataset?"
+):
+    print(chunk, end="", flush=True)
+```
+
+### Advanced configuration
+
+```python
+from graphrag.config.models.drift_search_config import DRIFTSearchConfig
+
+# Customize DRIFT configuration
+config.drift_search = DRIFTSearchConfig(
+    # Primer settings - broad initial exploration
+    primer_top_k_reports=15,  # Consider more reports
+    primer_temperature=0.2,   # Slight creativity
+    primer_max_tokens=1500,
+    
+    # Local search settings - detailed follow-ups
+    local_search_text_unit_prop=0.6,
+    local_search_community_prop=0.2,
+    local_search_top_k_mapped_entities=20,
+    local_search_max_data_tokens=10000,
+    
+    # Follow-up settings - deeper exploration
+    max_follow_up_questions=7,
+    max_search_depth=4,
+    confidence_threshold=0.6  # Continue with moderate confidence
+)
+
+response, context = await drift_search(
+    config=config,
+    # ... data parameters
+    query="Complex multi-faceted question"
+)
+```
+
+## Performance considerations
+
+### Computational cost
+
+<Warning>
+DRIFT search is more computationally intensive than either local or global search alone, as it combines both approaches with iterative refinement.
+</Warning>
+
+**Cost factors:**
+- Number of primer reports (`primer_top_k_reports`)
+- Number of follow-up questions (`max_follow_up_questions`)
+- Search depth (`max_search_depth`)
+- Token budgets for each phase
+
+### Optimization strategies
+
+```python
+# For faster, cheaper searches
+config.drift_search = DRIFTSearchConfig(
+    primer_top_k_reports=5,
+    max_follow_up_questions=3,
+    max_search_depth=2,
+    local_search_max_data_tokens=6000
+)
+
+# For comprehensive, high-quality searches
+config.drift_search = DRIFTSearchConfig(
+    primer_top_k_reports=20,
+    max_follow_up_questions=10,
+    max_search_depth=5,
+    local_search_max_data_tokens=12000
+)
+```
+
+### Confidence threshold tuning
+
+The `confidence_threshold` determines when to continue query expansion:
+
+- **Higher threshold (0.8-1.0)**: Only continue with high-confidence paths, faster but potentially less comprehensive
+- **Lower threshold (0.5-0.7)**: Explore more paths, more comprehensive but slower and more expensive
+- **Optimal range (0.6-0.7)**: Balanced exploration for most use cases
+
+## When to use DRIFT search
+
+DRIFT search is ideal for:
+
+<CardGroup cols={2}>
+  <Card title="Complex questions" icon="puzzle-piece">
+    Multi-faceted questions requiring both broad context and specific details
+  </Card>
+  <Card title="Exploratory analysis" icon="microscope">
+    When you need to discover connections and patterns not immediately obvious
+  </Card>
+  <Card title="Unfamiliar domains" icon="map">
+    Exploring new datasets where you're not sure what entities are relevant
+  </Card>
+  <Card title="Iterative refinement" icon="arrows-rotate">
+    Questions that benefit from progressive refinement and follow-up exploration
+  </Card>
+</CardGroup>
+
+### Comparison with other methods
+
+| Aspect | Local Search | Global Search | DRIFT Search |
+|--------|-------------|---------------|-------------|
+| **Starting point** | Entity embeddings | Community reports | Community reports + iterative local |
+| **Breadth** | Narrow | Wide | Wide → Narrow |
+| **Depth** | Deep | Shallow | Shallow → Deep |
+| **Cost** | Low | High | Medium-High |
+| **Iteration** | Single-pass | Map-reduce | Multi-pass iterative |
+| **Best for** | Known entities | Dataset themes | Complex exploration |
+
+## Best practices
+
+<Steps>
+  <Step title="Start with moderate settings">
+    Begin with default configuration and adjust based on results and budget
+  </Step>
+  
+  <Step title="Monitor query expansion">
+    Track the `query_state` to understand how questions are being refined
+  </Step>
+  
+  <Step title="Use confidence thresholds wisely">
+    Lower thresholds for exploratory queries, higher for focused questions
+  </Step>
+  
+  <Step title="Balance primer and local search">
+    Adjust `primer_top_k_reports` and local search parameters based on your use case
+  </Step>
+  
+  <Step title="Limit search depth for known topics">
+    Use lower `max_search_depth` when you have domain knowledge
+  </Step>
+</Steps>
+
+## Examples
+
+### Complex multi-entity exploration
+
+```python
+response, context = await drift_search(
+    config=config,
+    # ... data parameters
+    query="How do the research collaborations between different departments 
+           influence the innovation outcomes in the organization?",
+    response_type="Multi-Page Report"
+)
+```
+
+### Thematic discovery
+
+```python
+response, context = await drift_search(
+    config=config,
+    # ... data parameters
+    query="What are the emerging trends in the dataset and how are they interconnected?",
+    response_type="Multiple Paragraphs"
+)
+```
+
+### Guided exploration with callbacks
+
+```python
+from graphrag.callbacks.query_callbacks import QueryCallbacks
+
+class DRIFTProgressCallback(QueryCallbacks):
+    def on_primer_complete(self, action):
+        print(f"Primer found {len(action.follow_ups)} follow-up questions")
+    
+    def on_local_search_complete(self, depth, question, answer):
+        print(f"Depth {depth}: Answered '{question}'")
+
+callbacks = [DRIFTProgressCallback()]
+
+response, context = await drift_search(
+    config=config,
+    # ... data parameters
+    query="Your complex question",
+    callbacks=callbacks
+)
+```
+
+## Learn more
+
+For an in-depth look at the DRIFT search method and its theoretical foundations:
+
+<Card title="DRIFT Search blog post" icon="newspaper" href="https://www.microsoft.com/en-us/research/blog/introducing-drift-search-combining-global-and-local-search-methods-to-improve-quality-and-efficiency/">
+  Read the official Microsoft Research blog post introducing DRIFT Search
+</Card>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Local search" icon="location-dot" href="/query/local-search">
+    Learn about entity-based search
+  </Card>
+  <Card title="Global search" icon="globe" href="/query/global-search">
+    Understand dataset-wide reasoning
+  </Card>
+  <Card title="Example notebooks" icon="book-open" href="/examples/notebooks/drift-search">
+    See DRIFT search in action
+  </Card>
+  <Card title="Configuration" icon="gear" href="/query/overview">
+    Configure DRIFT search settings
+  </Card>
+</CardGroup>

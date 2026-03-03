@@ -1,0 +1,434 @@
+---
+title: CLI usage
+description: Learn how to use GraphRAG's command-line interface for indexing and querying knowledge graphs
+---
+
+The GraphRAG CLI provides a comprehensive set of commands for initializing projects, building knowledge graph indexes, and querying your data. All commands are accessible through the `graphrag` command.
+
+## Installation
+
+Ensure GraphRAG is installed before using the CLI:
+
+```bash
+pip install graphrag
+```
+
+## Available commands
+
+The GraphRAG CLI includes five main commands:
+
+<CardGroup cols={2}>
+  <Card title="init" icon="file-code">
+    Generate a default configuration file
+  </Card>
+  <Card title="index" icon="chart-network">
+    Build a knowledge graph index
+  </Card>
+  <Card title="update" icon="arrows-rotate">
+    Update an existing index
+  </Card>
+  <Card title="prompt-tune" icon="wand-magic-sparkles">
+    Generate custom prompts from your data
+  </Card>
+  <Card title="query" icon="magnifying-glass">
+    Query a knowledge graph index
+  </Card>
+</CardGroup>
+
+## Initialize a project
+
+The `init` command creates a new GraphRAG project with default configuration files.
+
+<Steps>
+  <Step title="Run initialization">
+    ```bash
+    graphrag init --root ./my-project
+    ```
+    
+    This creates:
+    - `settings.yaml` - Configuration file
+    - `.env` - Environment variables for API keys
+    - `prompts/` - Directory with default prompt templates
+    - `input/` - Directory for source documents
+  </Step>
+  
+  <Step title="Configure models">
+    Specify custom models during initialization:
+    
+    ```bash
+    graphrag init \
+      --root ./my-project \
+      --model gpt-4o \
+      --embedding text-embedding-3-large
+    ```
+  </Step>
+  
+  <Step title="Force overwrite (optional)">
+    Use `--force` to overwrite existing configuration:
+    
+    ```bash
+    graphrag init --root ./my-project --force
+    ```
+    
+    <Warning>
+      The `--force` flag will overwrite your existing `settings.yaml` and prompts. Back up your customizations first.
+    </Warning>
+  </Step>
+</Steps>
+
+### Init command options
+
+| Option | Short | Description | Default |
+|--------|-------|-------------|--------|
+| `--root` | `-r` | Project root directory | Current directory |
+| `--model` | `-m` | Default chat model to use | `gpt-4-turbo-preview` |
+| `--embedding` | `-e` | Default embedding model | `text-embedding-3-small` |
+| `--force` | `-f` | Force initialization even if project exists | `false` |
+
+## Build an index
+
+The `index` command processes your documents and builds a knowledge graph.
+
+```bash
+graphrag index --root ./my-project
+```
+
+### Indexing methods
+
+<CodeGroup>
+```bash Standard (default)
+graphrag index --root ./my-project --method standard
+```
+
+```bash With verbose logging
+graphrag index --root ./my-project --verbose
+```
+
+```bash Dry run (validate config)
+graphrag index --root ./my-project --dry-run
+```
+
+```bash Without LLM cache
+graphrag index --root ./my-project --no-cache
+```
+</CodeGroup>
+
+### Index command options
+
+| Option | Short | Description | Default |
+|--------|-------|-------------|--------|
+| `--root` | `-r` | Project root directory | Current directory |
+| `--method` | `-m` | Indexing method to use | `standard` |
+| `--verbose` | `-v` | Enable verbose logging | `false` |
+| `--dry-run` | | Validate config without executing | `false` |
+| `--cache/--no-cache` | | Enable/disable LLM cache | `true` |
+| `--skip-validation` | | Skip preflight validation | `false` |
+
+<Tip>
+  Use `--dry-run` to validate your configuration before running a full index. This helps catch configuration errors early.
+</Tip>
+
+## Update an existing index
+
+The `update` command incrementally updates an existing index with new documents.
+
+```bash
+graphrag update --root ./my-project
+```
+
+The update process:
+1. Detects new or modified documents in the input directory
+2. Processes only the changed documents
+3. Merges results with the existing index
+4. Outputs to `update_output/` folder by default
+
+<Warning>
+  Always run `graphrag init --force` between minor version bumps to ensure you have the latest config format before updating.
+</Warning>
+
+### Update command options
+
+| Option | Short | Description | Default |
+|--------|-------|-------------|--------|
+| `--root` | `-r` | Project root directory | Current directory |
+| `--method` | `-m` | Indexing method to use | `standard` |
+| `--verbose` | `-v` | Enable verbose logging | `false` |
+| `--cache/--no-cache` | | Enable/disable LLM cache | `true` |
+| `--skip-validation` | | Skip preflight validation | `false` |
+
+## Prompt tuning
+
+The `prompt-tune` command generates custom prompts tailored to your data domain.
+
+```bash
+graphrag prompt-tune --root ./my-project
+```
+
+### Advanced prompt tuning
+
+<CodeGroup>
+```bash With domain specification
+graphrag prompt-tune \
+  --root ./my-project \
+  --domain "medical research"
+```
+
+```bash Auto selection method
+graphrag prompt-tune \
+  --root ./my-project \
+  --selection-method auto \
+  --n-subset-max 300 \
+  --k 15
+```
+
+```bash Custom output location
+graphrag prompt-tune \
+  --root ./my-project \
+  --output ./custom-prompts
+```
+
+```bash Multi-language support
+graphrag prompt-tune \
+  --root ./my-project \
+  --language "Spanish"
+```
+</CodeGroup>
+
+### Prompt-tune command options
+
+| Option | Description | Default |
+|--------|-------------|--------|
+| `--root` | Project root directory | Current directory |
+| `--domain` | Domain of your input data | Auto-detected |
+| `--selection-method` | Text chunk selection method (`random`, `top`, `auto`) | `random` |
+| `--n-subset-max` | Number of chunks to embed (auto mode) | 300 |
+| `--k` | Max documents per centroid (auto mode) | 15 |
+| `--limit` | Number of documents to load (random/top) | 15 |
+| `--max-tokens` | Max token count for prompt generation | 2000 |
+| `--chunk-size` | Size of each text chunk | 200 |
+| `--language` | Primary language for prompts | Auto-detected |
+| `--output` | Directory to save prompts | `prompts` |
+
+<Tip>
+  Use `--selection-method auto` for large datasets. It uses k-means clustering to select representative documents.
+</Tip>
+
+## Query your index
+
+The `query` command searches your knowledge graph index.
+
+```bash
+graphrag query "What are the main themes in the dataset?" \
+  --root ./my-project \
+  --method global
+```
+
+### Query methods
+
+GraphRAG supports four search methods:
+
+<Tabs>
+  <Tab title="Global">
+    Global search uses the entire knowledge graph to answer questions about the dataset as a whole.
+    
+    ```bash
+    graphrag query "What are the main themes?" \
+      --method global \
+      --community-level 2
+    ```
+    
+    **Best for:** High-level questions, dataset summaries, theme identification
+  </Tab>
+  
+  <Tab title="Local">
+    Local search focuses on specific entities and their relationships.
+    
+    ```bash
+    graphrag query "Tell me about John Smith" \
+      --method local \
+      --community-level 2
+    ```
+    
+    **Best for:** Specific entity queries, detailed information retrieval
+  </Tab>
+  
+  <Tab title="DRIFT">
+    DRIFT combines local and global approaches for comprehensive answers.
+    
+    ```bash
+    graphrag query "How do the themes relate to specific people?" \
+      --method drift \
+      --community-level 2
+    ```
+    
+    **Best for:** Complex queries requiring both breadth and depth
+  </Tab>
+  
+  <Tab title="Basic">
+    Basic search uses simple text similarity without the knowledge graph.
+    
+    ```bash
+    graphrag query "Find mentions of AI" \
+      --method basic
+    ```
+    
+    **Best for:** Simple keyword searches, quick lookups
+  </Tab>
+</Tabs>
+
+### Query command options
+
+| Option | Short | Description | Default |
+|--------|-------|-------------|--------|
+| `query` | | The query string (required) | - |
+| `--root` | `-r` | Project root directory | Current directory |
+| `--method` | `-m` | Query algorithm (`global`, `local`, `drift`, `basic`) | `global` |
+| `--data` | `-d` | Index output directory | Auto-detected |
+| `--community-level` | | Leiden hierarchy level | `2` |
+| `--dynamic-community-selection` | | Use dynamic community selection | `false` |
+| `--response-type` | | Desired response format | `Multiple Paragraphs` |
+| `--streaming` | | Stream the response | `false` |
+| `--verbose` | `-v` | Enable verbose logging | `false` |
+
+### Custom response types
+
+You can specify different response formats:
+
+<CodeGroup>
+```bash Single sentence
+graphrag query "What is this about?" \
+  --response-type "Single Sentence"
+```
+
+```bash Bullet points
+graphrag query "List the main findings" \
+  --response-type "List of 3-7 Points"
+```
+
+```bash Multiple paragraphs (default)
+graphrag query "Explain the methodology" \
+  --response-type "Multiple Paragraphs"
+```
+</CodeGroup>
+
+### Streaming responses
+
+Enable streaming for real-time output:
+
+```bash
+graphrag query "Complex research question" \
+  --method global \
+  --streaming
+```
+
+<Tip>
+  Use `--streaming` for long-form responses to see results as they're generated.
+</Tip>
+
+## Common workflows
+
+### Complete project setup
+
+<Steps>
+  <Step title="Initialize project">
+    ```bash
+    graphrag init --root ./my-research
+    ```
+  </Step>
+  
+  <Step title="Add your documents">
+    ```bash
+    cp ~/documents/*.txt ./my-research/input/
+    ```
+  </Step>
+  
+  <Step title="Configure API keys">
+    Edit `.env` and add your API key:
+    ```bash
+    GRAPHRAG_API_KEY=sk-your-key-here
+    ```
+  </Step>
+  
+  <Step title="Tune prompts (recommended)">
+    ```bash
+    graphrag prompt-tune --root ./my-research --domain "your domain"
+    ```
+  </Step>
+  
+  <Step title="Build the index">
+    ```bash
+    graphrag index --root ./my-research --verbose
+    ```
+  </Step>
+  
+  <Step title="Query your data">
+    ```bash
+    graphrag query "What are the main findings?" \
+      --root ./my-research \
+      --method global
+    ```
+  </Step>
+</Steps>
+
+### Incremental updates
+
+<Steps>
+  <Step title="Add new documents">
+    ```bash
+    cp ~/new-documents/*.txt ./my-research/input/
+    ```
+  </Step>
+  
+  <Step title="Update the index">
+    ```bash
+    graphrag update --root ./my-research --verbose
+    ```
+  </Step>
+  
+  <Step title="Query updated index">
+    Point queries to the update output:
+    ```bash
+    graphrag query "What's new?" \
+      --root ./my-research \
+      --data ./my-research/update_output
+    ```
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Check configuration without indexing
+
+```bash
+graphrag index --root ./my-project --dry-run --verbose
+```
+
+### Skip validation for non-LLM steps
+
+```bash
+graphrag index --root ./my-project --skip-validation
+```
+
+### Specify custom data directory
+
+```bash
+graphrag query "my question" \
+  --data ./custom/output/path
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Python API" icon="code" href="/guides/python-api">
+    Learn how to use GraphRAG programmatically
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration/overview">
+    Customize your GraphRAG settings
+  </Card>
+  <Card title="Prompt tuning" icon="wand-magic-sparkles" href="/prompt-tuning/overview">
+    Optimize prompts for your domain
+  </Card>
+  <Card title="Azure setup" icon="cloud" href="/guides/azure-setup">
+    Configure Azure OpenAI integration
+  </Card>
+</CardGroup>

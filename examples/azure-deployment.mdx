@@ -1,0 +1,471 @@
+---
+title: Azure deployment
+description: Deploy GraphRAG with Azure OpenAI and Azure cloud services
+---
+
+This guide walks you through deploying GraphRAG using Azure services, including Azure OpenAI for language models and Azure Storage for scalable data management.
+
+## Why Azure?
+
+Azure provides enterprise-grade features for GraphRAG deployments:
+
+- **Managed OpenAI** - No API key rotation, enterprise SLAs
+- **Scalable storage** - Blob Storage and Cosmos DB integration
+- **Security** - Managed identities, VNet integration, private endpoints
+- **Compliance** - Meet regulatory requirements with Azure's certifications
+- **Cost management** - Detailed billing and budget controls
+
+## Prerequisites
+
+<Steps>
+  <Step title="Azure subscription">
+    Ensure you have an active Azure subscription with appropriate permissions.
+  </Step>
+  
+  <Step title="Azure CLI">
+    Install the Azure CLI:
+    
+    <CodeGroup>
+      ```bash macOS
+      brew install azure-cli
+      ```
+      
+      ```bash Windows
+      winget install Microsoft.AzureCLI
+      ```
+      
+      ```bash Linux
+      curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+      ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="Login to Azure">
+    Authenticate with your Azure account:
+    
+    ```bash
+    az login
+    az account set --subscription "Your Subscription Name"
+    ```
+  </Step>
+</Steps>
+
+## Set up Azure OpenAI
+
+<Steps>
+  <Step title="Create Azure OpenAI resource">
+    Create an Azure OpenAI service instance:
+    
+    ```bash
+    az cognitiveservices account create \
+      --name graphrag-openai \
+      --resource-group graphrag-resources \
+      --location eastus \
+      --kind OpenAI \
+      --sku S0 \
+      --custom-domain graphrag-openai
+    ```
+  </Step>
+
+  <Step title="Deploy models">
+    Deploy the required models (chat and embeddings):
+    
+    ```bash
+    # Deploy GPT-4 for chat
+    az cognitiveservices account deployment create \
+      --name graphrag-openai \
+      --resource-group graphrag-resources \
+      --deployment-name gpt-4-deployment \
+      --model-name gpt-4 \
+      --model-version "0613" \
+      --model-format OpenAI \
+      --sku-capacity 10 \
+      --sku-name "Standard"
+    
+    # Deploy text-embedding-3-small for embeddings
+    az cognitiveservices account deployment create \
+      --name graphrag-openai \
+      --resource-group graphrag-resources \
+      --deployment-name embedding-deployment \
+      --model-name text-embedding-3-small \
+      --model-version "1" \
+      --model-format OpenAI \
+      --sku-capacity 10 \
+      --sku-name "Standard"
+    ```
+  </Step>
+
+  <Step title="Retrieve endpoint and key">
+    Get your Azure OpenAI endpoint and API key:
+    
+    ```bash
+    # Get endpoint
+    az cognitiveservices account show \
+      --name graphrag-openai \
+      --resource-group graphrag-resources \
+      --query "properties.endpoint" \
+      --output tsv
+    
+    # Get API key
+    az cognitiveservices account keys list \
+      --name graphrag-openai \
+      --resource-group graphrag-resources \
+      --query "key1" \
+      --output tsv
+    ```
+  </Step>
+</Steps>
+
+## Configure Azure Storage
+
+<Steps>
+  <Step title="Create storage account">
+    Create an Azure Storage account for your data:
+    
+    ```bash
+    az storage account create \
+      --name graphragstorage \
+      --resource-group graphrag-resources \
+      --location eastus \
+      --sku Standard_LRS \
+      --kind StorageV2
+    ```
+  </Step>
+
+  <Step title="Create containers">
+    Create containers for input and output data:
+    
+    ```bash
+    # Get connection string
+    CONNECTION_STRING=$(az storage account show-connection-string \
+      --name graphragstorage \
+      --resource-group graphrag-resources \
+      --query "connectionString" \
+      --output tsv)
+    
+    # Create containers
+    az storage container create \
+      --name graphrag-input \
+      --connection-string "$CONNECTION_STRING"
+    
+    az storage container create \
+      --name graphrag-output \
+      --connection-string "$CONNECTION_STRING"
+    ```
+  </Step>
+</Steps>
+
+## Configure GraphRAG for Azure
+
+<Steps>
+  <Step title="Update environment variables">
+    Create or update your `.env` file:
+    
+    ```bash .env
+    GRAPHRAG_API_KEY=your-azure-openai-api-key
+    AZURE_STORAGE_CONNECTION_STRING=your-storage-connection-string
+    ```
+  </Step>
+
+  <Step title="Configure settings.yaml">
+    Update `settings.yaml` with Azure-specific configuration:
+    
+    ```yaml settings.yaml
+    # Azure OpenAI Configuration
+    completion_models:
+      default_completion_model:
+        type: chat
+        model_provider: azure
+        model: gpt-4
+        deployment_name: gpt-4-deployment
+        api_base: https://graphrag-openai.openai.azure.com
+        api_version: 2024-02-15-preview
+        api_key: ${GRAPHRAG_API_KEY}
+    
+    embedding_models:
+      default_embedding_model:
+        type: embedding
+        model_provider: azure
+        model: text-embedding-3-small
+        deployment_name: embedding-deployment
+        api_base: https://graphrag-openai.openai.azure.com
+        api_version: 2024-02-15-preview
+        api_key: ${GRAPHRAG_API_KEY}
+    
+    # Azure Blob Storage for Input
+    input:
+      storage:
+        type: blob
+        connection_string: ${AZURE_STORAGE_CONNECTION_STRING}
+        container_name: graphrag-input
+      type: text
+      file_pattern: .*\.txt$
+    
+    # Azure Blob Storage for Output
+    output:
+      type: blob
+      connection_string: ${AZURE_STORAGE_CONNECTION_STRING}
+      container_name: graphrag-output
+    
+    # Optional: Azure Blob Storage for Cache
+    cache:
+      type: json
+      storage:
+        type: blob
+        connection_string: ${AZURE_STORAGE_CONNECTION_STRING}
+        container_name: graphrag-cache
+    ```
+  </Step>
+</Steps>
+
+## Using managed identity (recommended)
+
+For production deployments, use Azure Managed Identity instead of API keys:
+
+<Steps>
+  <Step title="Create managed identity">
+    Create a user-assigned managed identity:
+    
+    ```bash
+    az identity create \
+      --name graphrag-identity \
+      --resource-group graphrag-resources
+    ```
+  </Step>
+
+  <Step title="Grant permissions">
+    Assign the managed identity to Azure OpenAI:
+    
+    ```bash
+    # Get principal ID
+    PRINCIPAL_ID=$(az identity show \
+      --name graphrag-identity \
+      --resource-group graphrag-resources \
+      --query "principalId" \
+      --output tsv)
+    
+    # Assign Cognitive Services User role
+    az role assignment create \
+      --role "Cognitive Services User" \
+      --assignee "$PRINCIPAL_ID" \
+      --scope "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/graphrag-resources/providers/Microsoft.CognitiveServices/accounts/graphrag-openai"
+    
+    # Assign Storage Blob Data Contributor role
+    az role assignment create \
+      --role "Storage Blob Data Contributor" \
+      --assignee "$PRINCIPAL_ID" \
+      --scope "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/graphrag-resources/providers/Microsoft.Storage/storageAccounts/graphragstorage"
+    ```
+  </Step>
+
+  <Step title="Update configuration">
+    Modify `settings.yaml` to use managed identity:
+    
+    ```yaml
+    completion_models:
+      default_completion_model:
+        type: chat
+        model_provider: azure
+        model: gpt-4
+        deployment_name: gpt-4-deployment
+        api_base: https://graphrag-openai.openai.azure.com
+        api_version: 2024-02-15-preview
+        auth_method: azure_managed_identity  # Use managed identity
+        # Remove api_key line
+    ```
+  </Step>
+
+  <Step title="Authenticate Azure CLI">
+    Login with the managed identity:
+    
+    ```bash
+    az login --identity
+    ```
+  </Step>
+</Steps>
+
+## Deploy to Azure Container Instances
+
+Run GraphRAG in Azure Container Instances for scheduled indexing:
+
+<Steps>
+  <Step title="Create Dockerfile">
+    ```dockerfile Dockerfile
+    FROM python:3.11-slim
+    
+    WORKDIR /app
+    
+    RUN pip install graphrag
+    
+    COPY settings.yaml .
+    COPY .env .
+    
+    CMD ["graphrag", "index", "--root", "/app"]
+    ```
+  </Step>
+
+  <Step title="Build and push image">
+    Build and push to Azure Container Registry:
+    
+    ```bash
+    # Create container registry
+    az acr create \
+      --name graphragregistry \
+      --resource-group graphrag-resources \
+      --sku Basic
+    
+    # Build and push
+    az acr build \
+      --registry graphragregistry \
+      --image graphrag:latest .
+    ```
+  </Step>
+
+  <Step title="Deploy to ACI">
+    Create a container instance:
+    
+    ```bash
+    az container create \
+      --resource-group graphrag-resources \
+      --name graphrag-indexer \
+      --image graphragregistry.azurecr.io/graphrag:latest \
+      --cpu 2 \
+      --memory 4 \
+      --registry-login-server graphragregistry.azurecr.io \
+      --registry-username $(az acr credential show --name graphragregistry --query username -o tsv) \
+      --registry-password $(az acr credential show --name graphragregistry --query passwords[0].value -o tsv) \
+      --environment-variables \
+        GRAPHRAG_API_KEY="$GRAPHRAG_API_KEY" \
+        AZURE_STORAGE_CONNECTION_STRING="$CONNECTION_STRING"
+    ```
+  </Step>
+</Steps>
+
+## Optional: Azure Cosmos DB storage
+
+For enhanced scalability, use Azure Cosmos DB:
+
+<Steps>
+  <Step title="Create Cosmos DB account">
+    ```bash
+    az cosmosdb create \
+      --name graphrag-cosmos \
+      --resource-group graphrag-resources \
+      --kind GlobalDocumentDB
+    ```
+  </Step>
+
+  <Step title="Configure in settings.yaml">
+    ```yaml
+    output:
+      type: cosmosdb
+      connection_string: ${COSMOS_CONNECTION_STRING}
+      database_name: graphrag
+      container_name: output
+    ```
+  </Step>
+</Steps>
+
+## Cost optimization
+
+<Tabs>
+  <Tab title="Model selection">
+    Choose cost-effective models:
+    - Use `gpt-3.5-turbo` instead of `gpt-4` for initial testing
+    - Use `text-embedding-3-small` instead of `text-embedding-3-large`
+  </Tab>
+  
+  <Tab title="Rate limiting">
+    Configure rate limits to control costs:
+    ```yaml
+    completion_models:
+      default_completion_model:
+        rate_limit:
+          requests_per_period: 60
+          period_in_seconds: 60
+    ```
+  </Tab>
+  
+  <Tab title="Storage tiers">
+    Use appropriate storage tiers:
+    - Hot tier for active data
+    - Cool tier for archival
+    - Configure lifecycle policies
+  </Tab>
+  
+  <Tab title="Provisioned throughput">
+    For Azure OpenAI:
+    - Use provisioned throughput for predictable workloads
+    - Monitor and adjust capacity
+  </Tab>
+</Tabs>
+
+## Monitoring and logging
+
+<Steps>
+  <Step title="Enable diagnostics">
+    Enable diagnostic logging for Azure OpenAI:
+    
+    ```bash
+    az monitor diagnostic-settings create \
+      --name graphrag-diagnostics \
+      --resource "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/graphrag-resources/providers/Microsoft.CognitiveServices/accounts/graphrag-openai" \
+      --logs '[{"category": "RequestResponse", "enabled": true}]' \
+      --metrics '[{"category": "AllMetrics", "enabled": true}]' \
+      --workspace YOUR_LOG_ANALYTICS_WORKSPACE_ID
+    ```
+  </Step>
+
+  <Step title="Set up alerts">
+    Create alerts for cost and performance:
+    
+    ```bash
+    az monitor metrics alert create \
+      --name high-token-usage \
+      --resource-group graphrag-resources \
+      --scopes "/subscriptions/YOUR_SUBSCRIPTION_ID/resourceGroups/graphrag-resources/providers/Microsoft.CognitiveServices/accounts/graphrag-openai" \
+      --condition "total ProcessedPromptTokens > 1000000" \
+      --description "Alert when token usage exceeds threshold"
+    ```
+  </Step>
+</Steps>
+
+## Security best practices
+
+<CardGroup cols={2}>
+  <Card title="Use managed identities" icon="shield-check">
+    Avoid storing credentials, use Azure Managed Identity
+  </Card>
+  
+  <Card title="Private endpoints" icon="lock">
+    Configure private endpoints for Azure services
+  </Card>
+  
+  <Card title="Network security" icon="network-wired">
+    Implement VNet integration and firewall rules
+  </Card>
+  
+  <Card title="Key rotation" icon="key">
+    Automate API key rotation using Key Vault
+  </Card>
+</CardGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Multi-lingual support" icon="language" href="/examples/multi-lingual">
+    Deploy GraphRAG for multiple languages
+  </Card>
+  
+  <Card title="Enterprise knowledge" icon="building" href="/examples/use-cases/enterprise-knowledge">
+    Enterprise deployment patterns
+  </Card>
+  
+  <Card title="Configuration reference" icon="book" href="/configuration/settings">
+    Complete configuration guide
+  </Card>
+  
+  <Card title="Azure documentation" icon="cloud" href="https://learn.microsoft.com/azure/cognitive-services/openai/">
+    Azure OpenAI documentation
+  </Card>
+</CardGroup>

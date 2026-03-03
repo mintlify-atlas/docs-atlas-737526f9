@@ -1,0 +1,213 @@
+---
+title: Configuration enums
+description: Enumeration types used in GraphRAG configuration
+---
+
+GraphRAG uses several enumeration types to constrain configuration values to valid options.
+
+## ReportingType
+
+The reporting configuration type for the pipeline.
+
+**Module:** `graphrag.config.enums`
+
+**Base class:** `str, Enum`
+
+### Values
+
+<ParamField path="file" type="str" default="file">
+  The file reporting configuration type. Writes reporting output to local files.
+</ParamField>
+
+<ParamField path="blob" type="str" default="blob">
+  The blob reporting configuration type. Writes reporting output to Azure Blob Storage.
+</ParamField>
+
+### Example
+
+```python
+from graphrag.config.enums import ReportingType
+
+# Use in configuration
+reporting_type = ReportingType.file
+print(reporting_type)  # "file"
+```
+
+## AsyncType
+
+Enum for the type of async to use for concurrent operations.
+
+**Module:** `graphrag.config.enums`
+
+**Base class:** `str, Enum`
+
+### Values
+
+<ParamField path="AsyncIO" type="str" default="asyncio">
+  Use Python's asyncio for asynchronous operations. Provides true async/await concurrency.
+</ParamField>
+
+<ParamField path="Threaded" type="str" default="threaded">
+  Use thread-based concurrency for asynchronous operations. Default mode for most operations.
+</ParamField>
+
+### Example
+
+```python
+from graphrag.config.enums import AsyncType
+
+# Use in configuration
+async_mode = AsyncType.Threaded
+```
+
+## SearchMethod
+
+The type of search to run.
+
+**Module:** `graphrag.config.enums`
+
+**Base class:** `Enum`
+
+### Values
+
+<ParamField path="LOCAL" type="str" default="local">
+  Local search method. Searches within a local context using entities and relationships.
+</ParamField>
+
+<ParamField path="GLOBAL" type="str" default="global">
+  Global search method. Performs map-reduce search across community reports.
+</ParamField>
+
+<ParamField path="DRIFT" type="str" default="drift">
+  DRIFT search method. Dynamic reasoning and inference with followup trajectories.
+</ParamField>
+
+<ParamField path="BASIC" type="str" default="basic">
+  Basic search method. Simple vector similarity search.
+</ParamField>
+
+### Example
+
+```python
+from graphrag.config.enums import SearchMethod
+
+# Use string representation
+search_type = SearchMethod.LOCAL
+print(str(search_type))  # "local"
+```
+
+## IndexingMethod
+
+Enum for the type of indexing to perform.
+
+**Module:** `graphrag.config.enums`
+
+**Base class:** `str, Enum`
+
+### Values
+
+<ParamField path="Standard" type="str" default="standard">
+  Traditional GraphRAG indexing, with all graph construction and summarization performed by a language model. Provides highest quality but slower performance.
+</ParamField>
+
+<ParamField path="Fast" type="str" default="fast">
+  Fast indexing, using NLP for graph construction and language model for summarization. Significantly faster than standard indexing.
+</ParamField>
+
+<ParamField path="StandardUpdate" type="str" default="standard-update">
+  Incremental update with standard indexing. Updates an existing index with new documents using LLM-based extraction.
+</ParamField>
+
+<ParamField path="FastUpdate" type="str" default="fast-update">
+  Incremental update with fast indexing. Updates an existing index with new documents using NLP-based extraction.
+</ParamField>
+
+### Example
+
+```python
+from graphrag.config.enums import IndexingMethod
+
+# Use in indexing configuration
+method = IndexingMethod.Fast
+```
+
+## NounPhraseExtractorType
+
+Enum for the noun phrase extractor options used in NLP-based graph extraction.
+
+**Module:** `graphrag.config.enums`
+
+**Base class:** `str, Enum`
+
+### Values
+
+<ParamField path="RegexEnglish" type="str" default="regex_english">
+  Standard extractor using regex. Fastest option, but limited to English language text.
+</ParamField>
+
+<ParamField path="Syntactic" type="str" default="syntactic_parser">
+  Noun phrase extractor based on dependency parsing and named entity recognition (NER) using SpaCy. More accurate than regex but slower.
+</ParamField>
+
+<ParamField path="CFG" type="str" default="cfg">
+  Noun phrase extractor combining context-free grammar (CFG) based noun-chunk extraction and NER. Balanced approach between speed and accuracy.
+</ParamField>
+
+### Example
+
+```python
+from graphrag.config.enums import NounPhraseExtractorType
+
+# Use in NLP extraction configuration
+extractor = NounPhraseExtractorType.RegexEnglish
+```
+
+## ModularityMetric
+
+Enum for the modularity metric to use in graph clustering.
+
+**Module:** `graphrag.config.enums`
+
+**Base class:** `str, Enum`
+
+### Values
+
+<ParamField path="Graph" type="str" default="graph">
+  Graph modularity metric. Standard modularity calculation for community detection.
+</ParamField>
+
+<ParamField path="LCC" type="str" default="lcc">
+  Largest connected component modularity metric.
+</ParamField>
+
+<ParamField path="WeightedComponents" type="str" default="weighted_components">
+  Weighted components modularity metric. Takes edge weights into account when calculating modularity.
+</ParamField>
+
+### Example
+
+```python
+from graphrag.config.enums import ModularityMetric
+
+# Use in clustering configuration
+metric = ModularityMetric.Graph
+```
+
+## Usage in configuration
+
+Enums are used throughout the GraphRAG configuration to provide type safety and validation:
+
+```yaml
+# settings.yaml example
+reporting:
+  type: file  # Uses ReportingType.file
+  base_dir: logs
+
+async_mode: threaded  # Uses AsyncType.Threaded
+
+extract_graph_nlp:
+  text_analyzer:
+    extractor_type: regex_english  # Uses NounPhraseExtractorType.RegexEnglish
+```
+
+When loading configuration, string values are automatically converted to the appropriate enum types.

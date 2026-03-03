@@ -1,0 +1,141 @@
+---
+title: Query engine
+description: Learn about GraphRAG's query engine for retrieving information from indexed knowledge graphs
+icon: magnifying-glass
+---
+
+The Query Engine is the retrieval module of the GraphRAG library, operating over completed [indexes](/indexing/overview). It provides multiple search methods to answer different types of questions over your knowledge graph.
+
+## Search methods
+
+GraphRAG offers four distinct search methods, each optimized for different query patterns:
+
+<CardGroup cols={2}>
+  <Card title="Local search" icon="location-dot" href="/query/local-search">
+    Entity-based search combining knowledge graph data with raw text chunks for specific entity questions
+  </Card>
+  <Card title="Global search" icon="globe" href="/query/global-search">
+    Dataset-wide reasoning using community reports in a map-reduce fashion for holistic questions
+  </Card>
+  <Card title="DRIFT search" icon="compass" href="/query/drift-search">
+    Dynamic search combining global and local approaches with iterative follow-up questions
+  </Card>
+  <Card title="Basic search" icon="search" href="/query/basic-search">
+    Simple vector RAG over text chunks for comparison with advanced methods
+  </Card>
+</CardGroup>
+
+## Local search
+
+Local search generates answers by combining relevant data from the AI-extracted knowledge graph with text chunks of the raw documents. This method is suitable for questions that require an understanding of specific entities mentioned in the documents.
+
+<Info>
+**Example use case:** "What are the healing properties of chamomile?"
+</Info>
+
+Local search excels at:
+- Entity-specific questions
+- Questions requiring detailed context about particular items
+- Queries where you know the specific entities involved
+
+[Learn more about local search →](/query/local-search)
+
+## Global search
+
+Global search generates answers by searching over all AI-generated community reports in a map-reduce fashion. This is a resource-intensive method that provides comprehensive responses for questions requiring an understanding of the dataset as a whole.
+
+<Info>
+**Example use case:** "What are the most significant values of the herbs mentioned in this notebook?"
+</Info>
+
+Global search excels at:
+- Dataset-wide thematic questions
+- Questions requiring aggregation across multiple topics
+- Queries about overall patterns and trends
+
+[Learn more about global search →](/query/global-search)
+
+## DRIFT search
+
+DRIFT Search (Dynamic Reasoning and Inference with Flexible Traversal) introduces a new approach to local search queries by including community information in the search process. It combines characteristics of both global and local search to generate detailed responses while balancing computational costs with quality outcomes.
+
+<Info>
+**Key innovation:** DRIFT expands the breadth of the query's starting point and uses community insights to refine a query into detailed follow-up questions.
+</Info>
+
+DRIFT search excels at:
+- Complex questions requiring both broad and detailed context
+- Iterative exploration of topics
+- Questions that benefit from hierarchical reasoning
+
+[Learn more about DRIFT search →](/query/drift-search)
+
+## Basic search
+
+GraphRAG includes a rudimentary implementation of basic vector RAG to make it easy to compare different search results based on the type of question you are asking. You can specify the top `k` text unit chunks to include in the summarization context.
+
+<Info>
+**Purpose:** Baseline comparison with traditional RAG approaches
+</Info>
+
+[Learn more about basic search →](/query/basic-search)
+
+## Question generation
+
+In addition to search capabilities, GraphRAG provides question generation functionality that takes a list of user queries and generates candidate follow-up questions. This is useful for:
+
+- Generating follow-up questions in a conversation
+- Creating a list of questions for deeper dataset investigation
+- Guiding exploratory analysis
+
+[Learn more about question generation →](/query/question-generation)
+
+## Choosing a search method
+
+Use this guide to select the appropriate search method for your use case:
+
+<AccordionGroup>
+  <Accordion title="When to use local search">
+    - You know specific entities in your question
+    - You need detailed information about particular items
+    - Your question focuses on relationships between known entities
+    - You want faster, more cost-effective searches
+  </Accordion>
+  
+  <Accordion title="When to use global search">
+    - You need to understand themes across the entire dataset
+    - Your question requires aggregation of information
+    - You're asking about overall patterns or top-N items
+    - You need comprehensive, dataset-wide insights
+  </Accordion>
+  
+  <Accordion title="When to use DRIFT search">
+    - Your question is complex and multifaceted
+    - You want both broad context and specific details
+    - You need iterative refinement of the search
+    - You're exploring unfamiliar domains
+  </Accordion>
+  
+  <Accordion title="When to use basic search">
+    - You want to compare with traditional RAG
+    - Your use case is simple semantic similarity
+    - You need a baseline for evaluation
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Local search guide" icon="book" href="/query/local-search">
+    Detailed documentation on entity-based search
+  </Card>
+  <Card title="Global search guide" icon="book" href="/query/global-search">
+    Learn about dataset-wide reasoning
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration/overview">
+    Configure search parameters
+  </Card>
+  <Card title="API reference" icon="code" href="/api/query">
+    Python API documentation
+  </Card>
+</CardGroup>

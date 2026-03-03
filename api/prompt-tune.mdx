@@ -1,0 +1,320 @@
+---
+title: Prompt tune API
+description: Generate domain-specific prompts from your data
+---
+
+The prompt tuning API automatically generates optimized prompts tailored to your specific domain and documents. This eliminates the need for manual prompt engineering and ensures prompts are well-suited to your data.
+
+## generate_indexing_prompts
+
+Generate domain-specific prompts for entity extraction, entity summarization, and community summarization.
+
+```python
+from graphrag.api import generate_indexing_prompts, DocSelectionType
+from graphrag.config.models.graph_rag_config import GraphRagConfig
+
+config = GraphRagConfig.from_file("settings.yaml")
+
+extract_prompt, entity_prompt, community_prompt = await generate_indexing_prompts(
+    config=config,
+    limit=15,
+    selection_method=DocSelectionType.RANDOM
+)
+```
+
+### Parameters
+
+<ParamField path="config" type="GraphRagConfig" required>
+  GraphRAG configuration object. The function uses the configured input source to load documents for prompt generation.
+</ParamField>
+
+<ParamField path="limit" type="PositiveInt" default="15">
+  The maximum number of text chunks to load from the input documents. Higher values provide more context but take longer to process.
+</ParamField>
+
+<ParamField path="selection_method" type="DocSelectionType" default="DocSelectionType.RANDOM">
+  The method for selecting document chunks:
+  - `DocSelectionType.RANDOM` - Randomly select chunks
+  - `DocSelectionType.TOP` - Select the first chunks
+  - `DocSelectionType.AUTO` - Automatically select representative chunks using embeddings
+</ParamField>
+
+<ParamField path="domain" type="str | None" default="None">
+  The domain to map the input documents to (e.g., "medical research", "legal documents", "news articles"). If `None`, the domain will be automatically detected from the documents.
+</ParamField>
+
+<ParamField path="language" type="str | None" default="None">
+  The language to use for the prompts (e.g., "English", "Spanish", "French"). If `None`, the language will be automatically detected from the documents.
+</ParamField>
+
+<ParamField path="max_tokens" type="int" default="MAX_TOKEN_COUNT">
+  The maximum number of tokens to use in entity extraction prompts. Controls the length and complexity of the generated prompts.
+</ParamField>
+
+<ParamField path="discover_entity_types" type="bool" default="True">
+  Whether to automatically discover entity types from the documents. When `True`, the system analyzes your documents to identify relevant entity types. When `False`, generic entity types are used.
+</ParamField>
+
+<ParamField path="min_examples_required" type="PositiveInt" default="2">
+  The minimum number of examples required in entity extraction prompts. Higher values provide more guidance but make prompts longer.
+</ParamField>
+
+<ParamField path="n_subset_max" type="PositiveInt" default="300">
+  The maximum number of text chunks to embed when using `DocSelectionType.AUTO` selection method. Only relevant when selection_method is AUTO.
+</ParamField>
+
+<ParamField path="k" type="PositiveInt" default="15">
+  The number of documents to select when using `DocSelectionType.AUTO` selection method. Only relevant when selection_method is AUTO.
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Enable verbose logging output.
+</ParamField>
+
+### Returns
+
+<ResponseField name="extract_prompt" type="str">
+  The entity extraction prompt. Use this prompt in the `extract_graph` section of your GraphRAG configuration to guide entity and relationship extraction.
+</ResponseField>
+
+<ResponseField name="entity_prompt" type="str">
+  The entity summarization prompt. Use this prompt in the `entity_summarization` section of your configuration to guide how entities are summarized.
+</ResponseField>
+
+<ResponseField name="community_prompt" type="str">
+  The community summarization prompt. Use this prompt in the `community_summarization` section of your configuration to guide how community reports are generated.
+</ResponseField>
+
+## DocSelectionType
+
+Enum for document selection methods:
+
+```python
+from graphrag.api import DocSelectionType
+
+# Available options:
+DocSelectionType.RANDOM  # Random selection
+DocSelectionType.TOP     # Select first chunks
+DocSelectionType.AUTO    # Automatic representative selection
+```
+
+## Example: Basic usage
+
+```python
+import asyncio
+from graphrag.api import generate_indexing_prompts, DocSelectionType
+from graphrag.config.models.graph_rag_config import GraphRagConfig
+
+async def main():
+    # Load configuration
+    config = GraphRagConfig.from_file("settings.yaml")
+    
+    # Generate prompts
+    extract_prompt, entity_prompt, community_prompt = await generate_indexing_prompts(
+        config=config,
+        limit=20,
+        selection_method=DocSelectionType.AUTO,
+        verbose=True
+    )
+    
+    # Save prompts to files
+    with open("prompts/entity_extraction.txt", "w") as f:
+        f.write(extract_prompt)
+    
+    with open("prompts/entity_summarization.txt", "w") as f:
+        f.write(entity_prompt)
+    
+    with open("prompts/community_summarization.txt", "w") as f:
+        f.write(community_prompt)
+    
+    print("Prompts generated and saved successfully!")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Example: Specify domain and language
+
+```python
+import asyncio
+from graphrag.api import generate_indexing_prompts, DocSelectionType
+from graphrag.config.models.graph_rag_config import GraphRagConfig
+
+async def main():
+    config = GraphRagConfig.from_file("settings.yaml")
+    
+    # Generate prompts for medical documents in Spanish
+    extract_prompt, entity_prompt, community_prompt = await generate_indexing_prompts(
+        config=config,
+        domain="medical research",
+        language="Spanish",
+        limit=15,
+        selection_method=DocSelectionType.RANDOM,
+        verbose=True
+    )
+    
+    print("Domain-specific prompts generated!")
+    print(f"Extract prompt length: {len(extract_prompt)} characters")
+    print(f"Entity prompt length: {len(entity_prompt)} characters")
+    print(f"Community prompt length: {len(community_prompt)} characters")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Example: Auto-detect domain and language
+
+```python
+import asyncio
+from graphrag.api import generate_indexing_prompts, DocSelectionType
+from graphrag.config.models.graph_rag_config import GraphRagConfig
+
+async def main():
+    config = GraphRagConfig.from_file("settings.yaml")
+    
+    # Let the system auto-detect domain and language
+    extract_prompt, entity_prompt, community_prompt = await generate_indexing_prompts(
+        config=config,
+        limit=20,
+        selection_method=DocSelectionType.AUTO,
+        domain=None,  # Auto-detect
+        language=None,  # Auto-detect
+        discover_entity_types=True,
+        verbose=True
+    )
+    
+    # Display prompts
+    print("Entity Extraction Prompt:")
+    print("=" * 80)
+    print(extract_prompt)
+    print("\n")
+    
+    print("Entity Summarization Prompt:")
+    print("=" * 80)
+    print(entity_prompt)
+    print("\n")
+    
+    print("Community Summarization Prompt:")
+    print("=" * 80)
+    print(community_prompt)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Example: Fine-tune generation parameters
+
+```python
+import asyncio
+from graphrag.api import generate_indexing_prompts, DocSelectionType
+from graphrag.config.models.graph_rag_config import GraphRagConfig
+
+async def main():
+    config = GraphRagConfig.from_file("settings.yaml")
+    
+    # Fine-tune prompt generation
+    extract_prompt, entity_prompt, community_prompt = await generate_indexing_prompts(
+        config=config,
+        limit=30,  # Use more chunks for better coverage
+        selection_method=DocSelectionType.AUTO,
+        max_tokens=2000,  # Shorter prompts
+        discover_entity_types=True,  # Discover domain-specific entities
+        min_examples_required=3,  # More examples for clarity
+        n_subset_max=500,  # Embed more chunks for AUTO selection
+        k=20,  # Select more representative chunks
+        verbose=True
+    )
+    
+    print("Prompts generated with custom parameters")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Using generated prompts
+
+After generating prompts, update your GraphRAG configuration to use them:
+
+```yaml
+# settings.yaml
+
+extract_graph:
+  prompt: prompts/entity_extraction.txt
+
+entity_summarization:
+  prompt: prompts/entity_summarization.txt
+
+community_summarization:
+  prompt: prompts/community_summarization.txt
+```
+
+Then run the indexing pipeline:
+
+```python
+from graphrag.api import build_index
+
+# Index with custom prompts
+results = await build_index(config=config)
+```
+
+## How it works
+
+The prompt tuning process:
+
+1. **Document sampling** - Loads a sample of your documents using the specified selection method
+2. **Domain detection** - Analyzes documents to identify the domain (if not specified)
+3. **Language detection** - Detects the language used in documents (if not specified)
+4. **Persona generation** - Creates a persona suitable for the domain
+5. **Entity type discovery** - Identifies relevant entity types from your documents (if enabled)
+6. **Example generation** - Creates example extractions from your documents
+7. **Prompt assembly** - Constructs complete prompts using the generated components
+
+## Selection methods
+
+### Random selection
+
+Randomly samples chunks from your documents:
+
+```python
+selection_method=DocSelectionType.RANDOM
+```
+
+Best for: Large, homogeneous document sets where any sample is representative.
+
+### Top selection
+
+Selects the first chunks in document order:
+
+```python
+selection_method=DocSelectionType.TOP
+```
+
+Best for: When your documents are already ordered by relevance or importance.
+
+### Auto selection
+
+Uses embeddings to select diverse, representative chunks:
+
+```python
+selection_method=DocSelectionType.AUTO,
+n_subset_max=300,  # Chunks to embed
+k=15  # Chunks to select
+```
+
+Best for: Heterogeneous document sets where you want diverse representation.
+
+## Best practices
+
+1. **Use AUTO selection** for diverse document sets to ensure representative prompts
+2. **Specify domain and language** if you know them to save processing time
+3. **Enable entity type discovery** for domain-specific entity extraction
+4. **Use more chunks (limit=20-30)** for complex or diverse document sets
+5. **Save prompts to files** for version control and reproducibility
+6. **Review generated prompts** before using them in production
+7. **Regenerate prompts** when your document domain changes significantly
+
+## Related
+
+- [Index API](/api/index) - Build indexes with custom prompts
+- [Configuration](/configuration/overview) - Configure prompt tuning settings
+- [CLI prompt tune](/cli/prompt-tune) - CLI alternative for prompt generation

@@ -1,0 +1,419 @@
+---
+title: Multi-lingual support
+description: Use GraphRAG with documents in multiple languages
+---
+
+GraphRAG supports processing and querying documents in multiple languages by leveraging multilingual language models. This guide shows you how to configure GraphRAG for non-English content and mixed-language datasets.
+
+## Language model selection
+
+The key to multi-lingual support is choosing models that support your target languages:
+
+<CardGroup cols={2}>
+  <Card title="GPT-4 and GPT-4 Turbo" icon="comments">
+    Excellent support for 50+ languages including European, Asian, and Middle Eastern languages
+  </Card>
+  
+  <Card title="GPT-3.5 Turbo" icon="language">
+    Good support for major languages, more cost-effective for large-scale processing
+  </Card>
+  
+  <Card title="Multilingual embeddings" icon="chart-network">
+    text-embedding-3-small and text-embedding-3-large support 100+ languages
+  </Card>
+  
+  <Card title="Azure OpenAI" icon="cloud">
+    Same language support with additional compliance and regional deployment options
+  </Card>
+</CardGroup>
+
+## Basic configuration
+
+No special configuration is needed for most languages. The default settings work well:
+
+```yaml settings.yaml
+completion_models:
+  default_completion_model:
+    model_provider: openai
+    model: gpt-4  # Supports multiple languages out of the box
+    api_key: ${GRAPHRAG_API_KEY}
+
+embedding_models:
+  default_embedding_model:
+    model_provider: openai
+    model: text-embedding-3-small  # Multilingual embeddings
+    api_key: ${GRAPHRAG_API_KEY}
+```
+
+## Language-specific prompt tuning
+
+For better results, customize prompts in your target language:
+
+<Tabs>
+  <Tab title="Spanish">
+    ```txt prompts/entity_extraction_es.txt
+    -Objetivo-
+    Dado un documento de texto, identifique todas las entidades y sus relaciones.
+    
+    -Pasos-
+    1. Identifique todas las entidades en el texto
+    2. Para cada entidad, extraiga los atributos relevantes
+    3. Identifique las relaciones entre entidades
+    4. Formatee la salida según lo especificado
+    
+    -Tipos de Entidad-
+    - PERSONA: Individuos humanos
+    - ORGANIZACIÓN: Empresas, instituciones
+    - UBICACIÓN: Lugares físicos o virtuales
+    - EVENTO: Sucesos significativos
+    ```
+  </Tab>
+  
+  <Tab title="French">
+    ```txt prompts/entity_extraction_fr.txt
+    -Objectif-
+    Étant donné un document texte, identifiez toutes les entités et leurs relations.
+    
+    -Étapes-
+    1. Identifiez toutes les entités dans le texte
+    2. Pour chaque entité, extrayez les attributs pertinents
+    3. Identifiez les relations entre les entités
+    4. Formatez la sortie comme spécifié
+    
+    -Types d'Entité-
+    - PERSONNE: Individus humains
+    - ORGANISATION: Entreprises, institutions
+    - LIEU: Endroits physiques ou virtuels
+    - ÉVÉNEMENT: Événements importants
+    ```
+  </Tab>
+  
+  <Tab title="Japanese">
+    ```txt prompts/entity_extraction_ja.txt
+    -目標-
+    テキスト文書が与えられた場合、すべてのエンティティとその関係を識別します。
+    
+    -手順-
+    1. テキスト内のすべてのエンティティを識別する
+    2. 各エンティティについて、関連する属性を抽出する
+    3. エンティティ間の関係を識別する
+    4. 指定された形式で出力する
+    
+    -エンティティタイプ-
+    - 人物: 人間個人
+    - 組織: 企業、機関
+    - 場所: 物理的または仮想的な場所
+    - イベント: 重要な出来事
+    ```
+  </Tab>
+  
+  <Tab title="Chinese">
+    ```txt prompts/entity_extraction_zh.txt
+    -目标-
+    给定一个文本文档，识别所有实体及其关系。
+    
+    -步骤-
+    1. 识别文本中的所有实体
+    2. 对于每个实体，提取相关属性
+    3. 识别实体之间的关系
+    4. 按指定格式输出
+    
+    -实体类型-
+    - 人物: 人类个体
+    - 组织: 公司、机构
+    - 地点: 物理或虚拟位置
+    - 事件: 重要事件
+    ```
+  </Tab>
+</Tabs>
+
+## Processing mixed-language documents
+
+When working with documents in multiple languages:
+
+<Steps>
+  <Step title="Organize by language">
+    Optionally separate documents by language for better tracking:
+    
+    ```bash
+    input/
+    ├── en/
+    │   ├── document1.txt
+    │   └── document2.txt
+    ├── es/
+    │   ├── documento1.txt
+    │   └── documento2.txt
+    └── fr/
+        ├── document1.txt
+        └── document2.txt
+    ```
+  </Step>
+
+  <Step title="Use language-agnostic prompts">
+    For truly mixed content, use English prompts with instructions to handle multiple languages:
+    
+    ```txt
+    -Goal-
+    Given a text document that may contain content in multiple languages,
+    identify all entities and relationships. Preserve entity names in their
+    original language and provide descriptions in the source language.
+    
+    -Instructions-
+    - Maintain entity names in original language
+    - Generate descriptions in the same language as the source text
+    - Identify language of each extracted entity
+    ```
+  </Step>
+
+  <Step title="Configure language metadata">
+    Track language information in your chunking configuration:
+    
+    ```yaml
+    chunking:
+      prepend_metadata: ["language", "source_file"]
+    ```
+  </Step>
+</Steps>
+
+## Querying in multiple languages
+
+GraphRAG supports queries in different languages:
+
+<CodeGroup>
+  ```bash English
+  graphrag query "What are the main themes in this dataset?"
+  ```
+  
+  ```bash Spanish
+  graphrag query "¿Cuáles son los temas principales en este conjunto de datos?"
+  ```
+  
+  ```bash French
+  graphrag query "Quels sont les thèmes principaux de cet ensemble de données?"
+  ```
+  
+  ```bash Japanese
+  graphrag query "このデータセットの主なテーマは何ですか？"
+  ```
+  
+  ```bash Chinese
+  graphrag query "这个数据集的主要主题是什么？"
+  ```
+</CodeGroup>
+
+<Note>
+The LLM will attempt to respond in the same language as your query. For mixed-language datasets, you can specify the desired response language in your query.
+</Note>
+
+## Best practices for specific languages
+
+<AccordionGroup>
+  <Accordion title="Chinese (Simplified/Traditional)">
+    - Use larger chunk sizes due to character density
+    - Consider using `gpt-4` for better understanding of classical vs. modern Chinese
+    - Test entity extraction with both simplified and traditional characters
+    
+    ```yaml
+    chunking:
+      size: 800  # Increase from default 400
+      overlap: 200  # Increase overlap proportionally
+    ```
+  </Accordion>
+  
+  <Accordion title="Japanese">
+    - Account for mixed scripts (Hiragana, Katakana, Kanji)
+    - Use character-based rather than token-based chunking
+    - Test entity extraction with company names (often use Kanji)
+    
+    ```yaml
+    chunking:
+      type: sentence  # Better for Japanese text
+      size: 600
+    ```
+  </Accordion>
+  
+  <Accordion title="Arabic/Hebrew (RTL languages)">
+    - Ensure text encoding is UTF-8
+    - Be aware that some entity names may be transliterated
+    - Test with mixed RTL/LTR content (common in technical documents)
+    
+    ```yaml
+    input:
+      encoding: utf-8
+    ```
+  </Accordion>
+  
+  <Accordion title="German">
+    - Long compound words may need special handling
+    - Consider noun capitalization in entity extraction
+    - Adjust chunk sizes for longer words
+    
+    ```yaml
+    chunking:
+      size: 500  # Slightly larger for compound words
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Example: Multi-lingual research corpus
+
+Here's a complete example for processing academic papers in multiple languages:
+
+<Steps>
+  <Step title="Prepare data">
+    Organize papers with language metadata:
+    
+    ```csv input/papers.csv
+    id,title,text,language,author,year
+    1,"Machine Learning Basics","Full text...",en,"Smith",2023
+    2,"Apprentissage Automatique","Texte complet...",fr,"Dubois",2023
+    3,"機械学習の基礎","全文...",ja,"田中",2023
+    ```
+  </Step>
+
+  <Step title="Configure for CSV input">
+    ```yaml settings.yaml
+    input:
+      type: csv
+      file_pattern: .*\.csv$
+      id_column: id
+      title_column: title
+      text_column: text
+    
+    chunking:
+      prepend_metadata: ["language", "author", "year"]
+      size: 600
+      overlap: 100
+    ```
+  </Step>
+
+  <Step title="Create multilingual prompts">
+    ```txt prompts/entity_extraction_multilingual.txt
+    -Goal-
+    Extract academic entities from research papers in any language.
+    Preserve technical terms and names in their original language.
+    
+    -Entity Types-
+    - RESEARCHER: Authors and cited researchers
+    - CONCEPT: Scientific concepts and methods
+    - INSTITUTION: Universities and research organizations
+    - PUBLICATION: Papers, journals, conferences
+    
+    -Instructions-
+    - Keep researcher names in original form
+    - Preserve technical terminology in source language
+    - Translate descriptions to match source document language
+    ```
+  </Step>
+
+  <Step title="Query across languages">
+    ```bash
+    # Query in English
+    graphrag query "What machine learning concepts are discussed?" --method global
+    
+    # Query in French
+    graphrag query "Quels chercheurs sont mentionnés?" --method local
+    
+    # Query in Japanese  
+    graphrag query "どの研究機関が関与していますか？" --method local
+    ```
+  </Step>
+</Steps>
+
+## Language detection and routing
+
+For advanced use cases, implement language detection:
+
+```python
+from langdetect import detect
+import pandas as pd
+
+# Detect language in documents
+df = pd.read_csv('input/documents.csv')
+df['detected_language'] = df['text'].apply(detect)
+
+# Route to language-specific prompts
+language_prompts = {
+    'en': 'prompts/entity_extraction_en.txt',
+    'es': 'prompts/entity_extraction_es.txt',
+    'fr': 'prompts/entity_extraction_fr.txt',
+    'ja': 'prompts/entity_extraction_ja.txt',
+}
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Poor entity extraction in target language">
+    Solutions:
+    - Use language-specific prompts
+    - Run auto prompt tuning with documents in target language
+    - Increase chunk size for languages with longer words/characters
+    - Verify model supports your target language well
+  </Accordion>
+  
+  <Accordion title="Mixed language responses">
+    Solutions:
+    - Explicitly specify response language in your query
+    - Use language-specific system prompts
+    - Separate documents by language during indexing
+  </Accordion>
+  
+  <Accordion title="Encoding issues">
+    Solutions:
+    - Ensure all files are UTF-8 encoded
+    - Verify `.env` file doesn't have encoding issues
+    - Check that storage systems support Unicode
+  </Accordion>
+</AccordionGroup>
+
+## Supported languages
+
+OpenAI models (GPT-4, GPT-3.5-turbo, embeddings) have strong support for:
+
+<Tabs>
+  <Tab title="European">
+    - English, Spanish, French, German, Italian
+    - Portuguese, Dutch, Polish, Russian
+    - Swedish, Norwegian, Danish, Finnish
+    - Greek, Turkish, Czech, Romanian
+  </Tab>
+  
+  <Tab title="Asian">
+    - Chinese (Simplified & Traditional)
+    - Japanese, Korean
+    - Vietnamese, Thai, Indonesian
+    - Hindi, Bengali, Tamil
+  </Tab>
+  
+  <Tab title="Middle Eastern">
+    - Arabic, Hebrew, Persian (Farsi)
+    - Turkish, Urdu
+  </Tab>
+  
+  <Tab title="Others">
+    - Swahili, Zulu
+    - Tagalog, Malay
+    - Over 100 total languages supported
+  </Tab>
+</Tabs>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Custom prompts" icon="pen" href="/examples/custom-prompts">
+    Create language-specific prompts
+  </Card>
+  
+  <Card title="Document Q&A" icon="comments" href="/examples/use-cases/document-qa">
+    Build multilingual Q&A systems
+  </Card>
+  
+  <Card title="Azure deployment" icon="cloud" href="/examples/azure-deployment">
+    Deploy with regional Azure endpoints
+  </Card>
+  
+  <Card title="Prompt tuning" icon="wand-magic-sparkles" href="/prompt-tuning/auto-tuning">
+    Auto-tune prompts for your language
+  </Card>
+</CardGroup>

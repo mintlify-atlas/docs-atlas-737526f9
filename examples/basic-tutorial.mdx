@@ -1,0 +1,277 @@
+---
+title: Basic tutorial
+description: Complete end-to-end tutorial for getting started with GraphRAG
+---
+
+This tutorial will walk you through the complete GraphRAG workflow, from installation to querying your indexed data. You'll learn how to set up GraphRAG, index a sample dataset, and perform both global and local searches.
+
+<Note>
+GraphRAG can consume significant LLM resources. Start with the tutorial dataset and inexpensive models before scaling up to larger datasets.
+</Note>
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- Python 3.10, 3.11, or 3.12 installed
+- An OpenAI API key or Azure OpenAI credentials
+- Basic familiarity with command line operations
+
+## Installation
+
+<Steps>
+  <Step title="Create a project directory">
+    Create a new directory for your GraphRAG project and navigate to it:
+    
+    ```bash
+    mkdir graphrag_tutorial
+    cd graphrag_tutorial
+    ```
+  </Step>
+
+  <Step title="Set up virtual environment">
+    Create and activate a Python virtual environment:
+    
+    <Tabs>
+      <Tab title="Unix/MacOS">
+        ```bash
+        python -m venv .venv
+        source .venv/bin/activate
+        ```
+      </Tab>
+      <Tab title="Windows">
+        ```bash
+        python -m venv .venv
+        .venv\Scripts\activate
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Install GraphRAG">
+    Install the GraphRAG package using pip:
+    
+    ```bash
+    python -m pip install graphrag
+    ```
+  </Step>
+</Steps>
+
+## Initialize your workspace
+
+<Steps>
+  <Step title="Run initialization">
+    Initialize your GraphRAG workspace:
+    
+    ```bash
+    graphrag init
+    ```
+    
+    When prompted, specify your preferred chat and embedding models. This command creates:
+    - `.env` - Environment variables file
+    - `settings.yaml` - Pipeline configuration
+    - `input/` - Directory for your source documents
+  </Step>
+
+  <Step title="Configure API credentials">
+    Open the `.env` file and add your API key:
+    
+    <CodeGroup>
+      ```bash OpenAI
+      GRAPHRAG_API_KEY=sk-your-openai-api-key-here
+      ```
+      
+      ```bash Azure OpenAI
+      GRAPHRAG_API_KEY=your-azure-api-key-here
+      ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Configure Azure settings (if applicable)">
+    If using Azure OpenAI, edit `settings.yaml` to add Azure-specific configuration:
+    
+    ```yaml
+    completion_models:
+      default_completion_model:
+        type: chat
+        model_provider: azure
+        model: gpt-4.1
+        deployment_name: <AZURE_DEPLOYMENT_NAME>
+        api_base: https://<instance>.openai.azure.com
+        api_version: 2024-02-15-preview
+    
+    embedding_models:
+      default_embedding_model:
+        type: embedding
+        model_provider: azure
+        model: text-embedding-3-small
+        deployment_name: <AZURE_EMBEDDING_DEPLOYMENT_NAME>
+        api_base: https://<instance>.openai.azure.com
+        api_version: 2024-02-15-preview
+    ```
+  </Step>
+</Steps>
+
+## Add sample data
+
+<Steps>
+  <Step title="Download sample text">
+    Download a sample text file to process. We'll use "A Christmas Carol" by Charles Dickens:
+    
+    ```bash
+    curl https://www.gutenberg.org/cache/epub/24022/pg24022.txt -o ./input/book.txt
+    ```
+  </Step>
+
+  <Step title="Verify the input">
+    Confirm the file was downloaded successfully:
+    
+    ```bash
+    ls -lh input/
+    ```
+    
+    You should see `book.txt` in the input directory.
+  </Step>
+</Steps>
+
+## Run the indexing pipeline
+
+<Steps>
+  <Step title="Start indexing">
+    Execute the indexing pipeline to process your documents:
+    
+    ```bash
+    graphrag index
+    ```
+    
+    This process will:
+    - Extract entities and relationships from your text
+    - Build a knowledge graph structure
+    - Generate community summaries
+    - Create embeddings for semantic search
+    
+    <Note>
+    The indexing process typically takes several minutes depending on document size and API rate limits. Progress will be displayed in your terminal.
+    </Note>
+  </Step>
+
+  <Step title="Review output">
+    After completion, check the `./output` directory for generated parquet files:
+    
+    ```bash
+    ls -lh output/
+    ```
+    
+    Key output files include:
+    - `entities.parquet` - Extracted entities
+    - `relationships.parquet` - Entity relationships
+    - `communities.parquet` - Detected communities
+    - `community_reports.parquet` - Community summaries
+    - `text_units.parquet` - Chunked text segments
+  </Step>
+</Steps>
+
+## Query your data
+
+Now that your data is indexed, you can query it using two different search methods.
+
+### Global search
+
+Global search answers high-level questions by analyzing community reports across the entire dataset.
+
+<Steps>
+  <Step title="Run a global query">
+    Ask a broad question about the entire dataset:
+    
+    ```bash
+    graphrag query "What are the main themes in this story?"
+    ```
+    
+    Global search is ideal for questions like:
+    - "What are the top themes?"
+    - "What is the overall narrative?"
+    - "What are the key events?"
+  </Step>
+</Steps>
+
+### Local search
+
+Local search answers specific questions by combining knowledge graph data with relevant text chunks.
+
+<Steps>
+  <Step title="Run a local query">
+    Ask a specific question about entities or details:
+    
+    ```bash
+    graphrag query \
+      "Who is Scrooge and what are his main relationships?" \
+      --method local
+    ```
+    
+    Local search is ideal for questions like:
+    - "Who is [character] and what do they do?"
+    - "What is the relationship between X and Y?"
+    - "What are the properties of [entity]?"
+  </Step>
+</Steps>
+
+## Understanding the results
+
+<Tabs>
+  <Tab title="Response">
+    The main output is the AI-generated answer to your query, synthesized from the indexed knowledge graph.
+  </Tab>
+  
+  <Tab title="Context">
+    GraphRAG includes context information showing which entities, relationships, and text chunks were used to generate the response.
+  </Tab>
+  
+  <Tab title="Token usage">
+    Token consumption statistics help you understand and optimize LLM costs.
+  </Tab>
+</Tabs>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Custom prompts" icon="pen" href="/examples/custom-prompts">
+    Learn how to customize prompts for better domain-specific results
+  </Card>
+  
+  <Card title="Azure deployment" icon="cloud" href="/examples/azure-deployment">
+    Deploy GraphRAG with Azure OpenAI and Azure Storage
+  </Card>
+  
+  <Card title="Configuration" icon="gear" href="/configuration/overview">
+    Explore advanced configuration options
+  </Card>
+  
+  <Card title="Query engine" icon="magnifying-glass" href="/query/overview">
+    Deep dive into search methods and parameters
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Rate limit errors">
+    If you encounter rate limit errors:
+    - Reduce the number of concurrent requests in `settings.yaml`
+    - Add rate limiting configuration
+    - Use a higher-tier API plan
+  </Accordion>
+  
+  <Accordion title="Out of memory errors">
+    For large datasets:
+    - Reduce chunk size in the chunking configuration
+    - Process documents in smaller batches
+    - Increase system memory allocation
+  </Accordion>
+  
+  <Accordion title="Empty or poor results">
+    To improve query results:
+    - Run prompt tuning to adapt prompts to your domain
+    - Verify your input data is properly formatted
+    - Adjust community detection parameters
+  </Accordion>
+</AccordionGroup>

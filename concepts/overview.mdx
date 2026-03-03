@@ -1,0 +1,180 @@
+---
+title: Core concepts overview
+description: Understanding GraphRAG's approach to structured, hierarchical retrieval augmented generation
+---
+
+GraphRAG is a structured, hierarchical approach to Retrieval Augmented Generation (RAG) that fundamentally differs from traditional semantic search methods. Instead of relying on plain text snippets, GraphRAG extracts a knowledge graph from raw text, builds a community hierarchy, generates summaries, and leverages these structures for enhanced reasoning.
+
+## What is GraphRAG?
+
+GraphRAG is a data pipeline and transformation suite designed to extract meaningful, structured data from unstructured text using the power of LLMs. It addresses critical limitations in baseline RAG systems:
+
+<CardGroup cols={2}>
+  <Card title="Connect the dots" icon="diagram-project">
+    Baseline RAG struggles when answers require traversing disparate pieces of information through shared attributes. GraphRAG excels at synthesizing insights across connected data.
+  </Card>
+  <Card title="Holistic understanding" icon="globe">
+    Traditional RAG performs poorly when summarizing semantic concepts over large collections. GraphRAG uses hierarchical community structures for dataset-wide comprehension.
+  </Card>
+  <Card title="Entity-centric reasoning" icon="sitemap">
+    GraphRAG builds knowledge graphs where entities and relationships provide structured access to information, enabling more precise retrieval.
+  </Card>
+  <Card title="Multi-level insights" icon="layer-group">
+    Community detection creates hierarchical summaries at multiple granularities, from high-level themes to detailed local clusters.
+  </Card>
+</CardGroup>
+
+## The GraphRAG process
+
+The GraphRAG workflow consists of two major phases: indexing and querying.
+
+### Indexing phase
+
+The indexing pipeline transforms raw documents into a structured knowledge model:
+
+<Steps>
+  <Step title="Slice documents into text units">
+    Input documents are chunked into analyzable text units (default: 1200 tokens) that serve as the foundation for extraction and provide fine-grained source references.
+  </Step>
+  
+  <Step title="Extract knowledge graph">
+    LLMs extract entities, relationships, and optional claims from each text unit. Entities represent people, places, organizations, or events. Relationships connect entities with descriptive context.
+  </Step>
+  
+  <Step title="Detect communities">
+    Hierarchical Leiden algorithm clusters the entity graph into communities at multiple levels, revealing the organizational structure of your data.
+  </Step>
+  
+  <Step title="Generate summaries">
+    Each community receives an LLM-generated summary from bottom-up, creating hierarchical understanding of the dataset at varying levels of detail.
+  </Step>
+  
+  <Step title="Create embeddings">
+    Text embeddings are generated for entities, text units, and community reports to enable semantic search during retrieval.
+  </Step>
+</Steps>
+
+### Query phase
+
+At query time, GraphRAG provides multiple search strategies tailored to different question types:
+
+<Tabs>
+  <Tab title="Global search">
+    **Best for:** Questions requiring holistic understanding of the entire dataset
+    
+    Uses community summaries in a map-reduce fashion to answer questions like "What are the top themes in this data?" or "What are the most significant trends?"
+    
+    Leverages the hierarchical community structure to provide comprehensive, dataset-wide insights.
+  </Tab>
+  
+  <Tab title="Local search">
+    **Best for:** Questions about specific entities or concepts
+    
+    Combines knowledge graph structure with raw text chunks. Starts with relevant entities and fans out to connected entities, relationships, and associated text units.
+    
+    Ideal for questions like "What are the healing properties of chamomile?" that require detailed, entity-specific information.
+  </Tab>
+  
+  <Tab title="DRIFT search">
+    **Best for:** Balanced exploration with both breadth and depth
+    
+    Dynamic Reasoning and Inference with Flexible Traversal combines global community insights with local search refinement.
+    
+    Generates follow-up questions to steer exploration, creating a hierarchical structure of questions and answers ranked by relevance.
+  </Tab>
+  
+  <Tab title="Basic search">
+    **Best for:** Simple semantic similarity queries
+    
+    Traditional vector search over text units when your query is best answered by standard top-k retrieval.
+  </Tab>
+</Tabs>
+
+## Key advantages over baseline RAG
+
+<AccordionGroup>
+  <Accordion title="Structured knowledge representation">
+    GraphRAG creates an explicit knowledge graph where entities and relationships are first-class objects. This structure enables:
+    
+    - Traversal of multi-hop connections
+    - Understanding of entity importance through graph metrics
+    - Relationship-aware retrieval
+    - Community-based organization
+  </Accordion>
+  
+  <Accordion title="Hierarchical summarization">
+    Community detection and bottom-up summarization provide:
+    
+    - Multi-level understanding from global themes to local details
+    - Pre-computed summaries that reduce query-time LLM costs
+    - Ability to reason about dataset structure
+    - Scalable comprehension of large document collections
+  </Accordion>
+  
+  <Accordion title="Multiple retrieval strategies">
+    Different query types require different approaches:
+    
+    - Global search for comprehensive, dataset-wide questions
+    - Local search for entity-specific inquiries
+    - DRIFT search for balanced exploration
+    - Basic search for simple similarity matching
+  </Accordion>
+  
+  <Accordion title="Provenance and citations">
+    Every extracted fact maintains links to:
+    
+    - Source text units
+    - Original documents
+    - Related entities and relationships
+    - Community memberships
+    
+    This enables transparent, verifiable results with clear source attribution.
+  </Accordion>
+</AccordionGroup>
+
+## The GraphRAG knowledge model
+
+The indexing process produces a structured knowledge model with these core entity types:
+
+- **Document**: Input files (individual CSV rows or .txt files)
+- **TextUnit**: Chunks of text for analysis and source references
+- **Entity**: Extracted people, places, events, organizations with types and descriptions
+- **Relationship**: Connections between entities with descriptive context
+- **Covariate**: Optional time-bound claims and statements about entities
+- **Community**: Hierarchical clusters of entities from community detection
+- **Community Report**: LLM-generated summaries of each community's contents
+
+<Note>
+  All outputs are stored as Parquet tables by default, with embeddings written to your configured vector store.
+</Note>
+
+## When to use GraphRAG
+
+GraphRAG is particularly powerful for:
+
+- **Complex reasoning tasks** that require connecting disparate pieces of information
+- **Large document collections** where understanding overall themes and structure matters
+- **Private datasets** where LLMs need to reason about previously unseen data
+- **Multi-hop questions** that require traversing relationships between entities
+- **Exploratory analysis** where you need both high-level summaries and detailed local information
+
+<Warning>
+  GraphRAG indexing can be expensive in terms of LLM API costs and processing time. Start with a small dataset to understand the process and costs before scaling up.
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Knowledge graphs" href="/concepts/knowledge-graphs" icon="diagram-project">
+    Learn how GraphRAG extracts and structures entity-relationship graphs
+  </Card>
+  <Card title="Indexing pipeline" href="/concepts/indexing-pipeline" icon="gears">
+    Explore the multi-phase indexing workflow in detail
+  </Card>
+  <Card title="Community detection" href="/concepts/community-detection" icon="users">
+    Understand hierarchical Leiden clustering and community summarization
+  </Card>
+  <Card title="Retrieval methods" href="/concepts/retrieval-methods" icon="magnifying-glass">
+    Compare global, local, DRIFT, and basic search strategies
+  </Card>
+</CardGroup>

@@ -1,0 +1,372 @@
+---
+title: Global search notebook
+description: Interactive notebook for understanding and experimenting with global search
+---
+
+Global search generates answers by analyzing all AI-generated community reports in a map-reduce fashion. This method is ideal for questions that require understanding of the dataset as a whole.
+
+<Note>
+This page references the [global_search.ipynb](https://github.com/microsoft/graphrag/blob/main/docs/examples_notebooks/global_search.ipynb) notebook from the GraphRAG repository.
+</Note>
+
+## When to use global search
+
+Global search is best suited for:
+
+- **High-level questions** - "What are the main themes?"
+- **Dataset-wide insights** - "What are the most significant trends?"
+- **Comparative analysis** - "How do different communities relate?"
+- **Summarization tasks** - "What is this dataset about?"
+
+## How global search works
+
+<Steps>
+  <Step title="Community report retrieval">
+    Global search loads all community reports generated during indexing. These reports summarize clusters of related entities and relationships.
+  </Step>
+  
+  <Step title="Map phase">
+    Each community report is sent to the LLM with your question, generating intermediate answers from different parts of the knowledge graph.
+  </Step>
+  
+  <Step title="Reduce phase">
+    Intermediate answers are aggregated and synthesized into a final, comprehensive response.
+  </Step>
+</Steps>
+
+## Setting up the notebook
+
+### Import required libraries
+
+```python
+import os
+import pandas as pd
+from graphrag.config.enums import ModelType
+from graphrag.config.models.language_model_config import LanguageModelConfig
+from graphrag.language_model.manager import ModelManager
+from graphrag.query.indexer_adapters import (
+    read_indexer_communities,
+    read_indexer_entities,
+    read_indexer_reports,
+)
+from graphrag.query.structured_search.global_search.community_context import (
+    GlobalCommunityContext,
+)
+from graphrag.query.structured_search.global_search.search import GlobalSearch
+from graphrag.tokenizer.get_tokenizer import get_tokenizer
+```
+
+### Configure language models
+
+<CodeGroup>
+  ```python OpenAI
+  api_key = os.environ["GRAPHRAG_API_KEY"]
+  
+  config = LanguageModelConfig(
+      api_key=api_key,
+      type=ModelType.Chat,
+      model_provider="openai",
+      model="gpt-4.1",
+      max_retries=20,
+  )
+  model = ModelManager().get_or_create_chat_model(
+      name="global_search",
+      model_type=ModelType.Chat,
+      config=config,
+  )
+  
+  tokenizer = get_tokenizer(config)
+  ```
+  
+  ```python Azure OpenAI
+  api_key = os.environ["GRAPHRAG_API_KEY"]
+  
+  config = LanguageModelConfig(
+      api_key=api_key,
+      type=ModelType.Chat,
+      model_provider="azure",
+      model="gpt-4",
+      deployment_name="gpt-4-deployment",
+      api_base="https://your-instance.openai.azure.com",
+      api_version="2024-02-15-preview",
+      max_retries=20,
+  )
+  model = ModelManager().get_or_create_chat_model(
+      name="global_search",
+      model_type=ModelType.Chat,
+      config=config,
+  )
+  
+  tokenizer = get_tokenizer(config)
+  ```
+</CodeGroup>
+
+## Load community reports
+
+```python
+# Path to indexing outputs
+INPUT_DIR = "./inputs/operation dulce"
+COMMUNITY_TABLE = "communities"
+COMMUNITY_REPORT_TABLE = "community_reports"
+ENTITY_TABLE = "entities"
+
+# Community level to use (higher = more fine-grained, more expensive)
+COMMUNITY_LEVEL = 2
+
+# Load parquet files
+community_df = pd.read_parquet(f"{INPUT_DIR}/{COMMUNITY_TABLE}.parquet")
+entity_df = pd.read_parquet(f"{INPUT_DIR}/{ENTITY_TABLE}.parquet")
+report_df = pd.read_parquet(f"{INPUT_DIR}/{COMMUNITY_REPORT_TABLE}.parquet")
+
+# Convert to GraphRAG data structures
+communities = read_indexer_communities(community_df, report_df)
+reports = read_indexer_reports(report_df, community_df, COMMUNITY_LEVEL)
+entities = read_indexer_entities(entity_df, community_df, COMMUNITY_LEVEL)
+
+print(f"Total report count: {len(report_df)}")
+print(f"Report count at level {COMMUNITY_LEVEL}: {len(reports)}")
+```
+
+<Note>
+The `COMMUNITY_LEVEL` parameter controls granularity. Higher values use more detailed community reports but increase computational cost.
+</Note>
+
+## Build global context
+
+```python
+context_builder = GlobalCommunityContext(
+    community_reports=reports,
+    communities=communities,
+    entities=entities,  # Optional: enables community weight calculation
+    tokenizer=tokenizer,
+)
+```
+
+## Configure search parameters
+
+<Tabs>
+  <Tab title="Context builder">
+    ```python
+    context_builder_params = {
+        "use_community_summary": False,  # True = summaries, False = full reports
+        "shuffle_data": True,  # Randomize report order
+        "include_community_rank": True,  # Include rank for prioritization
+        "min_community_rank": 0,  # Minimum rank threshold
+        "community_rank_name": "rank",
+        "include_community_weight": True,  # Weight by entity count
+        "community_weight_name": "occurrence weight",
+        "normalize_community_weight": True,
+        "max_tokens": 12_000,  # Context window size
+        "context_name": "Reports",
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Map LLM">
+    ```python
+    map_llm_params = {
+        "max_tokens": 1000,  # Tokens per intermediate answer
+        "temperature": 0.0,  # Deterministic for consistency
+        "response_format": {"type": "json_object"},  # Structured output
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Reduce LLM">
+    ```python
+    reduce_llm_params = {
+        "max_tokens": 2000,  # Tokens for final answer
+        "temperature": 0.0,  # Deterministic
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Create search engine
+
+```python
+search_engine = GlobalSearch(
+    model=model,
+    context_builder=context_builder,
+    tokenizer=tokenizer,
+    max_data_tokens=12_000,
+    map_llm_params=map_llm_params,
+    reduce_llm_params=reduce_llm_params,
+    allow_general_knowledge=False,  # Strictly use indexed data only
+    json_mode=True,  # Requires model support
+    context_builder_params=context_builder_params,
+    concurrent_coroutines=32,  # Parallel map operations
+    response_type="multiple paragraphs",  # Output format guidance
+)
+```
+
+## Perform search
+
+```python
+result = await search_engine.search("What is operation dulce?")
+
+print(result.response)
+```
+
+### Inspect context data
+
+```python
+# View which reports were used
+result.context_data["reports"]
+```
+
+### Analyze token usage
+
+```python
+print(f"LLM calls: {result.llm_calls}")
+print(f"Prompt tokens: {result.prompt_tokens}")
+print(f"Output tokens: {result.output_tokens}")
+print(f"Total cost estimate: ${(result.prompt_tokens * 0.00001 + result.output_tokens * 0.00003):.4f}")
+```
+
+## Example queries
+
+<AccordionGroup>
+  <Accordion title="Dataset-wide themes">
+    ```python
+    result = await search_engine.search(
+        "What are the top 5 themes in this dataset?"
+    )
+    print(result.response)
+    ```
+  </Accordion>
+  
+  <Accordion title="Comparative analysis">
+    ```python
+    result = await search_engine.search(
+        "How do different organizations interact in this narrative?"
+    )
+    print(result.response)
+    ```
+  </Accordion>
+  
+  <Accordion title="Trend identification">
+    ```python
+    result = await search_engine.search(
+        "What are the most significant events and their outcomes?"
+    )
+    print(result.response)
+    ```
+  </Accordion>
+  
+  <Accordion title="Summary generation">
+    ```python
+    # Change response type for different output formats
+    search_engine.response_type = "executive summary"
+    
+    result = await search_engine.search(
+        "Provide a comprehensive summary of this dataset"
+    )
+    print(result.response)
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Tuning parameters
+
+### Community level selection
+
+<Tabs>
+  <Tab title="Level 0 (coarsest)">
+    - Fewest communities
+    - Broadest summaries
+    - Lowest cost
+    - Best for very high-level questions
+  </Tab>
+  
+  <Tab title="Level 1-2 (balanced)">
+    - Moderate granularity
+    - Good cost/quality tradeoff
+    - Recommended starting point
+  </Tab>
+  
+  <Tab title="Level 3+ (finest)">
+    - Most detailed communities
+    - Highest quality answers
+    - Significantly higher cost
+    - Best for complex analysis
+  </Tab>
+</Tabs>
+
+### Response type options
+
+```python
+# Customize output format
+response_types = [
+    "single paragraph",
+    "multiple paragraphs",
+    "executive summary",
+    "prioritized list",
+    "bullet points",
+    "detailed report",
+]
+
+search_engine.response_type = "bullet points"
+```
+
+## Performance optimization
+
+<CardGroup cols={2}>
+  <Card title="Parallel processing" icon="bolt">
+    Increase `concurrent_coroutines` for faster map phase
+    ```python
+    concurrent_coroutines=64
+    ```
+  </Card>
+  
+  <Card title="Token management" icon="gauge">
+    Adjust `max_tokens` based on your model limits
+    ```python
+    max_data_tokens=8000  # For 8k models
+    ```
+  </Card>
+  
+  <Card title="Community filtering" icon="filter">
+    Set minimum rank to skip low-importance communities
+    ```python
+    min_community_rank=5
+    ```
+  </Card>
+  
+  <Card title="Summary mode" icon="compress">
+    Use summaries instead of full reports to reduce tokens
+    ```python
+    use_community_summary=True
+    ```
+  </Card>
+</CardGroup>
+
+## Comparison with local search
+
+| Aspect | Global Search | Local Search |
+|--------|--------------|-------------|
+| **Question Type** | High-level, broad | Specific, detailed |
+| **Data Source** | Community reports | Entities + text chunks |
+| **Cost** | Higher (map-reduce) | Lower (single query) |
+| **Response Time** | Slower | Faster |
+| **Best For** | Themes, trends, summaries | Entity details, relationships |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Local search" icon="magnifying-glass" href="/examples/notebooks/local-search">
+    Learn about local search for specific queries
+  </Card>
+  
+  <Card title="DRIFT search" icon="route" href="/examples/notebooks/drift-search">
+    Explore hybrid search methods
+  </Card>
+  
+  <Card title="Search comparison" icon="code-compare" href="/examples/notebooks/comparison">
+    Compare all search methods
+  </Card>
+  
+  <Card title="Query guide" icon="book" href="/query/global-search">
+    Complete global search documentation
+  </Card>
+</CardGroup>

@@ -1,0 +1,71 @@
+---
+title: CLI overview
+description: Command-line interface for GraphRAG
+---
+
+The GraphRAG CLI provides a complete command-line interface for building, querying, and maintaining knowledge graph indexes.
+
+## Installation
+
+The GraphRAG CLI is included when you install the graphrag package:
+
+```bash
+pip install graphrag
+```
+
+## Available commands
+
+The CLI provides the following commands:
+
+- `graphrag init` - Initialize a new GraphRAG project with default configuration
+- `graphrag index` - Build a knowledge graph index from your documents
+- `graphrag update` - Update an existing knowledge graph index with new data
+- `graphrag query` - Query a knowledge graph index using various search methods
+- `graphrag prompt-tune` - Generate custom prompts tuned to your domain and data
+
+## Global options
+
+All commands support the following global options:
+
+<ParamField path="--help" type="flag">
+  Display help information for a command
+</ParamField>
+
+## Getting started
+
+To get started with GraphRAG:
+
+1. Initialize a new project:
+   ```bash
+   graphrag init --root ./my-project
+   ```
+
+2. Add your documents to the `input` directory
+
+3. Build the knowledge graph:
+   ```bash
+   graphrag index --root ./my-project
+   ```
+
+4. Query your knowledge graph:
+   ```bash
+   graphrag query "What are the main themes?" --root ./my-project
+   ```
+
+## Configuration
+
+After running `graphrag init`, you'll find:
+
+- `settings.yaml` - Main configuration file
+- `.env` - Environment variables (API keys, etc.)
+- `prompts/` - Directory containing prompt templates
+- `input/` - Directory for your source documents
+
+See the [Configuration](/configuration/overview) section for detailed configuration options.
+
+## Next steps
+
+- [Initialize a project](/cli/init)
+- [Build an index](/cli/index)
+- [Query your data](/cli/query)
+- [Customize prompts](/cli/prompt-tune)

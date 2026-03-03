@@ -1,0 +1,477 @@
+---
+title: Settings reference
+description: Complete reference for GraphRAG settings.yaml configuration
+---
+
+GraphRAG can be configured using a `settings.yaml` or `settings.json` file in your project root. This page documents all available configuration options.
+
+## Environment variable substitution
+
+Configuration values can reference environment variables using `${VAR_NAME}` syntax:
+
+```yaml
+completion_models:
+  default_completion_model:
+    api_key: ${GRAPHRAG_API_KEY}
+```
+
+```bash .env
+GRAPHRAG_API_KEY=your-api-key-here
+```
+
+<Note>
+If a `.env` file is present in your project root, environment variables will be automatically loaded.
+</Note>
+
+## Language model configuration
+
+### Completion models
+
+Define completion models for text generation tasks:
+
+```yaml
+completion_models:
+  default_completion_model:
+    model_provider: openai
+    model: gpt-4.1
+    auth_method: api_key
+    api_key: ${GRAPHRAG_API_KEY}
+    retry:
+      type: exponential_backoff
+      max_retries: 7
+      base_delay: 2.0
+    rate_limit:
+      type: sliding_window
+      period_in_seconds: 60
+      requests_per_period: 100
+```
+
+<Tip>
+You can define multiple models and reference them by key in workflow configurations. See [LLM Models](/configuration/llm-models) for detailed examples.
+</Tip>
+
+### Embedding models
+
+Define embedding models for vector generation:
+
+```yaml
+embedding_models:
+  default_embedding_model:
+    model_provider: openai
+    model: text-embedding-3-large
+    auth_method: api_key
+    api_key: ${GRAPHRAG_API_KEY}
+```
+
+## Input configuration
+
+### Input settings
+
+Configure document input format and location:
+
+```yaml
+input:
+  type: text  # text, csv, json, jsonl
+  encoding: utf-8
+  file_pattern: ".*\\.txt$"  # regex pattern for files
+  id_column: id  # for CSV/JSON
+  title_column: title  # for CSV/JSON
+  text_column: text  # for CSV/JSON
+```
+
+<ParamField path="type" type="string" default="text">
+  Input data format: `text`, `csv`, `json`, or `jsonl`
+</ParamField>
+
+<ParamField path="encoding" type="string" default="utf-8">
+  Character encoding for input files
+</ParamField>
+
+<ParamField path="file_pattern" type="string">
+  Regex pattern to match input files (defaults based on type)
+</ParamField>
+
+<ParamField path="id_column" type="string">
+  Column name for document IDs (CSV/JSON only)
+</ParamField>
+
+<ParamField path="title_column" type="string">
+  Column name for document titles (CSV/JSON only)
+</ParamField>
+
+<ParamField path="text_column" type="string">
+  Column name for document text content (CSV/JSON only)
+</ParamField>
+
+### Chunking configuration
+
+Configure how documents are split into chunks:
+
+```yaml
+chunking:
+  type: tokens  # tokens or sentence
+  size: 1200
+  overlap: 100
+  encoding_model: o200k_base
+  prepend_metadata:
+    - title
+    - source
+```
+
+<ParamField path="type" type="string" default="tokens">
+  Chunking strategy: `tokens` or `sentence`
+</ParamField>
+
+<ParamField path="size" type="integer" default="1200">
+  Maximum chunk size in tokens
+</ParamField>
+
+<ParamField path="overlap" type="integer" default="100">
+  Number of overlapping tokens between chunks
+</ParamField>
+
+<ParamField path="encoding_model" type="string" default="o200k_base">
+  Tokenizer model for splitting text
+</ParamField>
+
+<ParamField path="prepend_metadata" type="array">
+  Document metadata fields to prepend to each chunk
+</ParamField>
+
+## Storage configuration
+
+See the [Storage](/configuration/storage) page for detailed storage configuration.
+
+## Workflow configurations
+
+### Text embedding
+
+Configure text embedding generation:
+
+```yaml
+embed_text:
+  embedding_model_id: default_embedding_model
+  model_instance_name: text_embedding
+  batch_size: 16
+  batch_max_tokens: 8191
+  names:
+    - text_unit_text
+    - entity_description
+    - community_full_content
+```
+
+<ParamField path="embedding_model_id" type="string" required>
+  Reference to embedding model configuration
+</ParamField>
+
+<ParamField path="batch_size" type="integer" default="16">
+  Maximum number of texts to embed in one batch
+</ParamField>
+
+<ParamField path="batch_max_tokens" type="integer" default="8191">
+  Maximum total tokens per batch
+</ParamField>
+
+<ParamField path="names" type="array">
+  Which embeddings to generate: `text_unit_text`, `entity_description`, `community_full_content`
+</ParamField>
+
+### Graph extraction
+
+Configure LLM-based entity and relationship extraction:
+
+```yaml
+extract_graph:
+  completion_model_id: default_completion_model
+  model_instance_name: extract_graph
+  prompt: "prompts/extract_graph.txt"
+  entity_types:
+    - organization
+    - person
+    - geo
+    - event
+  max_gleanings: 1
+```
+
+<ParamField path="completion_model_id" type="string" required>
+  Reference to completion model configuration
+</ParamField>
+
+<ParamField path="prompt" type="string">
+  Path to extraction prompt file
+</ParamField>
+
+<ParamField path="entity_types" type="array" default="[organization, person, geo, event]">
+  List of entity types to extract
+</ParamField>
+
+<ParamField path="max_gleanings" type="integer" default="1">
+  Number of additional extraction passes for thoroughness
+</ParamField>
+
+### NLP-based extraction
+
+Configure NLP-based graph extraction (alternative to LLM):
+
+```yaml
+extract_graph_nlp:
+  normalize_edge_weights: true
+  concurrent_requests: 25
+  async_mode: threaded  # threaded or asyncio
+  text_analyzer:
+    extractor_type: regex_english  # regex_english, syntactic_parser, cfg
+    max_word_length: 15
+    include_named_entities: true
+```
+
+### Description summarization
+
+Configure entity and relationship description summarization:
+
+```yaml
+summarize_descriptions:
+  completion_model_id: default_completion_model
+  model_instance_name: summarize_descriptions
+  prompt: "prompts/summarize_descriptions.txt"
+  max_length: 500
+  max_input_tokens: 4000
+```
+
+<ParamField path="max_length" type="integer" default="500">
+  Maximum output tokens per summary
+</ParamField>
+
+<ParamField path="max_input_tokens" type="integer" default="4000">
+  Maximum input tokens to collect for summarization
+</ParamField>
+
+### Graph clustering
+
+Configure Leiden hierarchical clustering:
+
+```yaml
+cluster_graph:
+  max_cluster_size: 10
+  use_lcc: true
+  seed: 0xDEADBEEF
+```
+
+<ParamField path="max_cluster_size" type="integer" default="10">
+  Maximum cluster size for export
+</ParamField>
+
+<ParamField path="use_lcc" type="boolean" default="true">
+  Whether to use only the largest connected component
+</ParamField>
+
+<ParamField path="seed" type="integer" default="0xDEADBEEF">
+  Random seed for consistent clustering results
+</ParamField>
+
+### Graph pruning
+
+Configure optional graph pruning to optimize modularity:
+
+```yaml
+prune_graph:
+  min_node_freq: 2
+  max_node_freq_std: null
+  min_node_degree: 1
+  max_node_degree_std: null
+  min_edge_weight_pct: 40.0
+  remove_ego_nodes: true
+  lcc_only: false
+```
+
+<ParamField path="min_node_freq" type="integer" default="2">
+  Minimum node frequency to retain
+</ParamField>
+
+<ParamField path="min_node_degree" type="integer" default="1">
+  Minimum node degree (connections) to retain
+</ParamField>
+
+<ParamField path="min_edge_weight_pct" type="float" default="40.0">
+  Minimum edge weight percentile to retain
+</ParamField>
+
+<ParamField path="remove_ego_nodes" type="boolean" default="true">
+  Remove ego nodes (nodes connected to everything)
+</ParamField>
+
+### Community reports
+
+Configure community report generation:
+
+```yaml
+community_reports:
+  completion_model_id: default_completion_model
+  model_instance_name: community_reporting
+  graph_prompt: "prompts/community_report_graph.txt"
+  text_prompt: "prompts/community_report_text.txt"
+  max_length: 2000
+  max_input_length: 8000
+```
+
+<ParamField path="graph_prompt" type="string">
+  Prompt for graph-based community summarization
+</ParamField>
+
+<ParamField path="text_prompt" type="string">
+  Prompt for text-based community summarization
+</ParamField>
+
+<ParamField path="max_length" type="integer" default="2000">
+  Maximum output tokens per report
+</ParamField>
+
+<ParamField path="max_input_length" type="integer" default="8000">
+  Maximum input tokens for report generation
+</ParamField>
+
+### Claim extraction
+
+Configure optional claim extraction:
+
+```yaml
+extract_claims:
+  enabled: false
+  completion_model_id: default_completion_model
+  prompt: "prompts/extract_claims.txt"
+  description: "Any claims or facts that could be relevant to information discovery."
+  max_gleanings: 1
+```
+
+<Warning>
+Claim extraction is disabled by default and requires prompt tuning for your specific domain.
+</Warning>
+
+### Snapshots
+
+Configure optional data snapshots:
+
+```yaml
+snapshots:
+  embeddings: false
+  graphml: false
+  raw_graph: false
+```
+
+<ParamField path="embeddings" type="boolean" default="false">
+  Export embeddings to parquet files
+</ParamField>
+
+<ParamField path="graphml" type="boolean" default="false">
+  Export graph to GraphML format
+</ParamField>
+
+<ParamField path="raw_graph" type="boolean" default="false">
+  Export raw extracted graph before merging
+</ParamField>
+
+## Query configurations
+
+### Local search
+
+Configure local search for targeted queries:
+
+```yaml
+local_search:
+  completion_model_id: default_completion_model
+  embedding_model_id: default_embedding_model
+  prompt: "prompts/local_search_system_prompt.txt"
+  text_unit_prop: 0.5
+  community_prop: 0.15
+  conversation_history_max_turns: 5
+  top_k_entities: 10
+  top_k_relationships: 10
+  max_context_tokens: 12000
+```
+
+### Global search
+
+Configure global search for broad queries:
+
+```yaml
+global_search:
+  completion_model_id: default_completion_model
+  map_prompt: "prompts/global_search_map_system_prompt.txt"
+  reduce_prompt: "prompts/global_search_reduce_system_prompt.txt"
+  knowledge_prompt: "prompts/global_search_knowledge_system_prompt.txt"
+  data_max_tokens: 12000
+  map_max_length: 1000
+  reduce_max_length: 2000
+  dynamic_search_threshold: 1
+```
+
+### DRIFT search
+
+Configure DRIFT search for iterative exploration:
+
+```yaml
+drift_search:
+  completion_model_id: default_completion_model
+  embedding_model_id: default_embedding_model
+  prompt: "prompts/drift_search_system_prompt.txt"
+  reduce_prompt: "prompts/drift_search_reduce_prompt.txt"
+  n_depth: 3
+  drift_k_followups: 20
+  concurrency: 32
+```
+
+### Basic search
+
+Configure basic vector search:
+
+```yaml
+basic_search:
+  completion_model_id: default_completion_model
+  embedding_model_id: default_embedding_model
+  prompt: "prompts/basic_search_system_prompt.txt"
+  k: 10
+  max_context_tokens: 12000
+```
+
+## Advanced settings
+
+### Workflows
+
+Override the default workflow execution order:
+
+```yaml
+workflows:
+  - extract_graph
+  - summarize_descriptions
+  - cluster_graph
+  - community_reports
+```
+
+<Info>
+Most users don't need to customize workflows. Only specify this if you want precise control over execution order.
+</Info>
+
+### Concurrency settings
+
+Control global concurrency for async operations:
+
+```yaml
+concurrent_requests: 25
+async_mode: threaded  # threaded or asyncio
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="LLM models" icon="brain" href="/configuration/llm-models">
+    Detailed guide to configuring language models
+  </Card>
+  <Card title="Storage" icon="database" href="/configuration/storage">
+    Configure storage backends and caching
+  </Card>
+  <Card title="Initialization" icon="rocket" href="/configuration/initialization">
+    Learn about the init command
+  </Card>
+  <Card title="Start indexing" icon="play" href="/indexing/overview">
+    Begin processing your documents
+  </Card>
+</CardGroup>

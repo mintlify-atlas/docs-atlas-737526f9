@@ -1,0 +1,633 @@
+---
+title: Document Q&A
+description: Build intelligent question-answering systems over large document collections with GraphRAG
+---
+
+GraphRAG enables powerful question-answering (Q&A) systems that go beyond simple keyword matching to provide context-aware, accurate answers grounded in your documents.
+
+## Use case overview
+
+Document Q&A with GraphRAG provides:
+
+- **Semantic understanding** - Answer questions based on meaning, not just keywords
+- **Multi-document synthesis** - Combine information from multiple sources
+- **Entity-aware responses** - Understand questions about specific people, places, things
+- **Relationship queries** - Answer "how" and "why" questions about connections
+- **Source attribution** - Provide evidence and citations for answers
+
+## Basic Q&A pipeline
+
+<Steps>
+  <Step title="Prepare document collection">
+    Organize your documents in a supported format:
+    
+    <CodeGroup>
+      ```txt Text files
+      input/
+      ├── policy_handbook.txt
+      ├── employee_benefits.txt
+      ├── safety_procedures.txt
+      └── compliance_guide.txt
+      ```
+      
+      ```csv CSV format
+      id,title,content,category,last_updated
+      1,"Policy Handbook","Full text...","HR","2024-01-15"
+      2,"Employee Benefits","Full text...","HR","2024-02-01"
+      3,"Safety Procedures","Full text...","Safety","2023-12-10"
+      ```
+      
+      ```json JSON format
+      [
+        {
+          "id": "doc1",
+          "title": "Policy Handbook",
+          "content": "Full text...",
+          "metadata": {"category": "HR", "version": "2.1"}
+        }
+      ]
+      ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Configure and index">
+    Set up GraphRAG for Q&A:
+    
+    ```yaml settings.yaml
+    input:
+      type: text  # or csv, json
+      file_pattern: .*\.txt$
+    
+    chunking:
+      size: 400  # Smaller chunks for precise retrieval
+      overlap: 100  # Good overlap for context
+    
+    entity_extraction:
+      # Use auto-tuning for domain-specific entities
+      enabled: true
+    ```
+    
+    Run indexing:
+    ```bash
+    graphrag index --root ./qa_system
+    ```
+  </Step>
+
+  <Step title="Query your documents">
+    Ask questions in natural language:
+    
+    ```bash
+    # Specific factual questions
+    graphrag query "What is the vacation policy for employees?" --method local
+    
+    # Broad overview questions
+    graphrag query "What are the main safety requirements?" --method global
+    
+    # Relationship questions
+    graphrag query "How does the benefits package relate to employee tenure?" --method local
+    ```
+  </Step>
+</Steps>
+
+## Question types and methods
+
+### Factual questions (use local search)
+
+<AccordionGroup>
+  <Accordion title="What questions">
+    ```bash
+    graphrag query "What is the procedure for requesting time off?" --method local
+    ```
+    
+    **Best for**: Retrieving specific facts, definitions, or procedures.
+  </Accordion>
+  
+  <Accordion title="Who questions">
+    ```bash
+    graphrag query "Who is responsible for safety compliance?" --method local
+    ```
+    
+    **Best for**: Identifying people, roles, or organizations.
+  </Accordion>
+  
+  <Accordion title="When questions">
+    ```bash
+    graphrag query "When do benefits enrollment periods occur?" --method local
+    ```
+    
+    **Best for**: Temporal information, deadlines, schedules.
+  </Accordion>
+  
+  <Accordion title="Where questions">
+    ```bash
+    graphrag query "Where should employees report safety incidents?" --method local
+    ```
+    
+    **Best for**: Location-based information.
+  </Accordion>
+</AccordionGroup>
+
+### Analytical questions (use global search)
+
+<AccordionGroup>
+  <Accordion title="Summary questions">
+    ```bash
+    graphrag query "Summarize the employee benefits program" --method global
+    ```
+    
+    **Best for**: High-level overviews across multiple documents.
+  </Accordion>
+  
+  <Accordion title="Comparison questions">
+    ```bash
+    graphrag query "Compare the different health insurance options available" --method global
+    ```
+    
+    **Best for**: Comparing multiple items or concepts.
+  </Accordion>
+  
+  <Accordion title="Trend questions">
+    ```bash
+    graphrag query "What are the key themes in our compliance policies?" --method global
+    ```
+    
+    **Best for**: Identifying patterns and themes.
+  </Accordion>
+</AccordionGroup>
+
+### Complex questions (use DRIFT search)
+
+```python
+# Multi-hop reasoning
+result = await drift_search.search(
+    "How do safety training requirements vary based on job role and department?"
+)
+
+# Causal questions
+result = await drift_search.search(
+    "What factors contribute to eligibility for the executive bonus program?"
+)
+
+# Exploratory questions
+result = await drift_search.search(
+    "What are all the ways an employee can request schedule changes?"
+)
+```
+
+## Building a Q&A application
+
+Here's a complete example of a document Q&A application:
+
+### Backend API
+
+```python
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import graphrag.api as api
+import pandas as pd
+from graphrag.config.load_config import load_config
+from pathlib import Path
+
+app = FastAPI(title="Document Q&A API")
+
+# Load GraphRAG configuration
+config = load_config(Path("./"))
+
+class Question(BaseModel):
+    query: str
+    method: str = "local"  # local, global, or drift
+    max_tokens: int = 2000
+
+class Answer(BaseModel):
+    query: str
+    answer: str
+    sources: list[dict]
+    method: str
+    tokens_used: int
+
+@app.post("/ask", response_model=Answer)
+async def ask_question(question: Question):
+    """Answer a question about the documents."""
+    
+    try:
+        if question.method == "local":
+            # Load required data for local search
+            entities = pd.read_parquet("./output/entities.parquet")
+            communities = pd.read_parquet("./output/communities.parquet")
+            reports = pd.read_parquet("./output/community_reports.parquet")
+            relationships = pd.read_parquet("./output/relationships.parquet")
+            text_units = pd.read_parquet("./output/text_units.parquet")
+            
+            response, context = await api.local_search(
+                config=config,
+                entities=entities,
+                communities=communities,
+                community_reports=reports,
+                relationships=relationships,
+                text_units=text_units,
+                query=question.query,
+            )
+            
+        elif question.method == "global":
+            # Load required data for global search
+            entities = pd.read_parquet("./output/entities.parquet")
+            communities = pd.read_parquet("./output/communities.parquet")
+            reports = pd.read_parquet("./output/community_reports.parquet")
+            
+            response, context = await api.global_search(
+                config=config,
+                entities=entities,
+                communities=communities,
+                community_reports=reports,
+                community_level=2,
+                query=question.query,
+            )
+        
+        else:
+            raise HTTPException(status_code=400, detail="Invalid method")
+        
+        # Extract source information
+        sources = []
+        if hasattr(context, 'sources'):
+            sources = context.sources[:5]  # Top 5 sources
+        
+        return Answer(
+            query=question.query,
+            answer=response,
+            sources=sources,
+            method=question.method,
+            tokens_used=getattr(context, 'prompt_tokens', 0) + getattr(context, 'output_tokens', 0)
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+```
+
+### Frontend interface
+
+```typescript
+// React component for Q&A interface
+import React, { useState } from 'react';
+
+interface Answer {
+  query: string;
+  answer: string;
+  sources: Array<{title: string; content: string}>;
+  method: string;
+  tokens_used: number;
+}
+
+function DocumentQA() {
+  const [query, setQuery] = useState('');
+  const [method, setMethod] = useState('local');
+  const [answer, setAnswer] = useState<Answer | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const askQuestion = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('http://localhost:8000/ask', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ query, method })
+      });
+      const data = await response.json();
+      setAnswer(data);
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="qa-container">
+      <h1>Document Q&A</h1>
+      
+      <div className="query-input">
+        <textarea
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Ask a question about your documents..."
+          rows={3}
+        />
+        
+        <div className="controls">
+          <select value={method} onChange={(e) => setMethod(e.target.value)}>
+            <option value="local">Local Search (Specific)</option>
+            <option value="global">Global Search (Overview)</option>
+          </select>
+          
+          <button onClick={askQuestion} disabled={loading || !query}>
+            {loading ? 'Searching...' : 'Ask'}
+          </button>
+        </div>
+      </div>
+
+      {answer && (
+        <div className="answer-section">
+          <h2>Answer</h2>
+          <p>{answer.answer}</p>
+          
+          <h3>Sources</h3>
+          <ul>
+            {answer.sources.map((source, idx) => (
+              <li key={idx}>
+                <strong>{source.title}</strong>: {source.content}
+              </li>
+            ))}
+          </ul>
+          
+          <p className="metadata">
+            Method: {answer.method} | Tokens: {answer.tokens_used}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default DocumentQA;
+```
+
+## Advanced features
+
+### Conversational Q&A
+
+Maintain conversation context for follow-up questions:
+
+```python
+from typing import List, Dict
+
+class ConversationalQA:
+    def __init__(self, search_engine):
+        self.search_engine = search_engine
+        self.conversation_history: List[Dict[str, str]] = []
+    
+    async def ask(self, question: str) -> str:
+        """Ask a question with conversation history."""
+        
+        # Build conversation history for context
+        history = self.conversation_history[-5:]  # Last 5 turns
+        
+        # Perform search with history
+        result = await self.search_engine.search(
+            question,
+            conversation_history=history
+        )
+        
+        # Update history
+        self.conversation_history.append({
+            "role": "user",
+            "content": question
+        })
+        self.conversation_history.append({
+            "role": "assistant",
+            "content": result.response
+        })
+        
+        return result.response
+
+# Usage
+qa = ConversationalQA(search_engine)
+
+response1 = await qa.ask("What are the vacation policies?")
+print(response1)
+
+# Follow-up question with context
+response2 = await qa.ask("How does that compare to sick leave?")  
+print(response2)  # Understands "that" refers to vacation policies
+```
+
+### Question suggestion
+
+Generate suggested follow-up questions:
+
+```python
+from graphrag.query.question_gen.local_gen import LocalQuestionGen
+
+question_generator = LocalQuestionGen(
+    model=chat_model,
+    context_builder=context_builder,
+    tokenizer=tokenizer,
+)
+
+# After answering a question
+question_history = ["What are the vacation policies?"]
+
+suggestions = await question_generator.agenerate(
+    question_history=question_history,
+    context_data=None,
+    question_count=5
+)
+
+print("Suggested follow-up questions:")
+for q in suggestions.response:
+    print(f"- {q}")
+
+# Output:
+# - How do employees request vacation time?
+# - What is the vacation accrual rate?
+# - Are there blackout dates for vacation?
+# - How does vacation time carry over between years?
+# - What happens to unused vacation when an employee leaves?
+```
+
+### Answer confidence scoring
+
+```python
+def calculate_confidence(result) -> float:
+    """Calculate confidence score based on context quality."""
+    
+    score = 0.0
+    
+    # Factor 1: Number of relevant entities found
+    if 'entities' in result.context_data:
+        entity_count = len(result.context_data['entities'])
+        score += min(entity_count / 5, 0.3)  # Max 0.3
+    
+    # Factor 2: Source text relevance
+    if 'sources' in result.context_data:
+        source_count = len(result.context_data['sources'])
+        score += min(source_count / 10, 0.3)  # Max 0.3
+    
+    # Factor 3: Relationship density
+    if 'relationships' in result.context_data:
+        rel_count = len(result.context_data['relationships'])
+        score += min(rel_count / 5, 0.2)  # Max 0.2
+    
+    # Factor 4: Response length (longer = more detailed)
+    response_len = len(result.response.split())
+    score += min(response_len / 200, 0.2)  # Max 0.2
+    
+    return min(score, 1.0)
+
+# Usage
+result = await search_engine.search("What is the refund policy?")
+confidence = calculate_confidence(result)
+
+if confidence > 0.7:
+    print(f"High confidence answer ({confidence:.2%}):")
+elif confidence > 0.4:
+    print(f"Moderate confidence answer ({confidence:.2%}):")
+else:
+    print(f"Low confidence answer ({confidence:.2%}). May need more context.")
+
+print(result.response)
+```
+
+## Domain-specific examples
+
+<Tabs>
+  <Tab title="Legal Q&A">
+    ```python
+    # Legal document Q&A setup
+    entity_types = [
+        "CASE", "STATUTE", "PARTY", "COURT",
+        "LEGAL_CONCEPT", "DATE", "JURISDICTION"
+    ]
+    
+    # Example queries
+    queries = [
+        "What are the key precedents for contract disputes?",
+        "Who are the parties involved in Case ABC-123?",
+        "What statutory requirements apply to this situation?",
+    ]
+    ```
+  </Tab>
+  
+  <Tab title="Technical documentation">
+    ```python
+    # Technical docs Q&A setup
+    entity_types = [
+        "API", "FUNCTION", "CLASS", "MODULE",
+        "PARAMETER", "ERROR", "CONFIGURATION"
+    ]
+    
+    # Example queries
+    queries = [
+        "How do I authenticate API requests?",
+        "What parameters does the login function accept?",
+        "What are the common error codes and their meanings?",
+    ]
+    ```
+  </Tab>
+  
+  <Tab title="Medical records">
+    ```python
+    # Medical Q&A setup (ensure HIPAA compliance!)
+    entity_types = [
+        "PATIENT", "CONDITION", "MEDICATION",
+        "PROCEDURE", "PROVIDER", "FACILITY"
+    ]
+    
+    # Example queries
+    queries = [
+        "What medications is the patient currently taking?",
+        "What procedures were performed during the visit?",
+        "What are the patient's known allergies?",
+    ]
+    ```
+  </Tab>
+  
+  <Tab title="Customer support">
+    ```python
+    # Support docs Q&A setup
+    entity_types = [
+        "PRODUCT", "FEATURE", "ISSUE",
+        "SOLUTION", "REQUIREMENT", "VERSION"
+    ]
+    
+    # Example queries
+    queries = [
+        "How do I reset my password?",
+        "What are the system requirements for version 2.0?",
+        "How do I troubleshoot connection issues?",
+    ]
+    ```
+  </Tab>
+</Tabs>
+
+## Performance optimization
+
+<CardGroup cols={2}>
+  <Card title="Cache frequent queries" icon="database">
+    ```python
+    from functools import lru_cache
+    
+    @lru_cache(maxsize=100)
+    async def cached_search(query: str):
+        return await search_engine.search(query)
+    ```
+  </Card>
+  
+  <Card title="Batch similar questions" icon="layer-group">
+    Group similar questions and answer together to reduce redundant context building
+  </Card>
+  
+  <Card title="Precompute embeddings" icon="bolt">
+    Index documents during off-peak hours; serve queries instantly
+  </Card>
+  
+  <Card title="Use appropriate search method" icon="route">
+    Local search for 80% of queries; global/DRIFT for complex cases only
+  </Card>
+</CardGroup>
+
+## Evaluation and quality
+
+### Creating a test set
+
+```python
+# Create question-answer pairs for evaluation
+test_set = [
+    {
+        "question": "What is the vacation policy?",
+        "expected_answer_contains": ["15 days", "accrual", "calendar year"],
+        "method": "local"
+    },
+    {
+        "question": "What are the main employee benefits?",
+        "expected_answer_contains": ["health insurance", "401k", "vacation"],
+        "method": "global"
+    },
+]
+
+# Run evaluation
+for test in test_set:
+    result = await search_engine.search(test["question"])
+    
+    # Check if expected content is present
+    score = sum(
+        1 for term in test["expected_answer_contains"]
+        if term.lower() in result.response.lower()
+    ) / len(test["expected_answer_contains"])
+    
+    print(f"Q: {test['question']}")
+    print(f"Score: {score:.0%}")
+    print(f"A: {result.response[:200]}...\n")
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Research analysis" icon="flask" href="/examples/use-cases/research-analysis">
+    Apply Q&A to research papers and academic content
+  </Card>
+  
+  <Card title="Enterprise knowledge" icon="building" href="/examples/use-cases/enterprise-knowledge">
+    Build internal knowledge bases and Q&A systems
+  </Card>
+  
+  <Card title="Search notebooks" icon="book" href="/examples/notebooks/comparison">
+    Deep dive into search methods
+  </Card>
+  
+  <Card title="Query API" icon="code" href="/query/overview">
+    Complete query API documentation
+  </Card>
+</CardGroup>

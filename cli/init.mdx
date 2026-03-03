@@ -1,0 +1,130 @@
+---
+title: graphrag init
+description: Initialize a new GraphRAG project
+---
+
+The `init` command generates a default configuration file and project structure for a new GraphRAG project.
+
+## Usage
+
+```bash
+graphrag init [OPTIONS]
+```
+
+## Options
+
+<ParamField path="--root" type="string" default="current directory">
+  The project root directory where the configuration will be created.
+  
+  **Aliases**: `-r`
+</ParamField>
+
+<ParamField path="--model" type="string" default="gpt-4.1">
+  The default chat/completion model to use for entity extraction, summarization, and other LLM operations.
+  
+  **Aliases**: `-m`
+  
+  This will be written to the `settings.yaml` configuration file and can be changed later.
+</ParamField>
+
+<ParamField path="--embedding" type="string" default="text-embedding-3-large">
+  The default embedding model to use for generating vector embeddings.
+  
+  **Aliases**: `-e`
+  
+  This will be written to the `settings.yaml` configuration file.
+</ParamField>
+
+<ParamField path="--force" type="boolean" default="false">
+  Force initialization even if the project already exists. This will overwrite existing configuration files.
+  
+  **Aliases**: `-f`
+</ParamField>
+
+## Examples
+
+### Initialize with default settings
+
+Create a new project in the current directory:
+
+```bash
+graphrag init
+```
+
+### Initialize in a specific directory
+
+```bash
+graphrag init --root ./my-project
+```
+
+### Specify custom models
+
+```bash
+graphrag init --model gpt-4o --embedding text-embedding-3-small
+```
+
+### Force overwrite existing project
+
+```bash
+graphrag init --force
+```
+
+## What gets created
+
+When you run `graphrag init`, the following files and directories are created:
+
+### Configuration files
+
+- **`settings.yaml`** - Main configuration file with indexing and search settings
+- **`.env`** - Environment variables file for API keys and secrets
+
+### Directories
+
+- **`input/`** - Place your source documents here (text files, PDFs, etc.)
+- **`prompts/`** - Contains all prompt templates used during indexing and querying
+
+### Prompt files
+
+The following prompt templates are created in the `prompts/` directory:
+
+- `extract_graph.txt` - Entity and relationship extraction
+- `summarize_descriptions.txt` - Entity description summarization
+- `extract_claims.txt` - Claim extraction (if enabled)
+- `community_report_graph.txt` - Community report generation from graph
+- `community_report_text.txt` - Community report generation from text
+- `drift_search_system_prompt.txt` - DRIFT search system prompt
+- `drift_reduce_prompt.txt` - DRIFT search reduce prompt
+- `global_search_map_system_prompt.txt` - Global search map phase
+- `global_search_reduce_system_prompt.txt` - Global search reduce phase
+- `global_search_knowledge_system_prompt.txt` - Global search knowledge instruction
+- `local_search_system_prompt.txt` - Local search system prompt
+- `basic_search_system_prompt.txt` - Basic search system prompt
+- `question_gen_system_prompt.txt` - Question generation system prompt
+
+## Next steps
+
+After initializing your project:
+
+1. Add your API key to the `.env` file:
+   ```bash
+   GRAPHRAG_API_KEY=your-api-key-here
+   ```
+
+2. Place your documents in the `input/` directory
+
+3. Optionally customize `settings.yaml` for your use case
+
+4. Run the indexing pipeline:
+   ```bash
+   graphrag index
+   ```
+
+## Error handling
+
+If you try to initialize a project that already exists, you'll receive an error:
+
+```
+Project already initialized at /path/to/project
+```
+
+Use the `--force` flag to overwrite the existing configuration.

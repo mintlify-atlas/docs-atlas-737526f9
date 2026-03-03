@@ -1,0 +1,356 @@
+---
+title: Manual prompt tuning
+description: Customize GraphRAG prompts manually for advanced use cases
+---
+
+The GraphRAG indexer, by default, will run with a handful of prompts that are designed to work well in the broad context of knowledge discovery. However, it is quite common to want to tune the prompts to better suit your specific use case.
+
+<Warning>
+  Manual tuning is an advanced feature. Most users should use [auto tuning](/prompt-tuning/auto-tuning) instead, which automatically generates domain-adapted prompts.
+</Warning>
+
+We provide a means for you to customize prompts by allowing you to specify a custom prompt file, which will use a series of token-replacements internally. Each of these prompts may be overridden by writing a custom prompt file in plaintext. We use token-replacements in the form of `{token_name}`, and the descriptions for the available tokens can be found below.
+
+## Indexing prompts
+
+These prompts are used during the indexing pipeline to extract and process knowledge from your input data.
+
+### Entity/relationship extraction
+
+This prompt is used to extract entities and relationships from text units.
+
+<Card title="View source" icon="github" href="https://github.com/microsoft/graphrag/blob/main/graphrag/prompts/index/extract_graph.py">
+  See the default prompt implementation
+</Card>
+
+#### Available tokens
+
+<ParamField path="{input_text}" type="string">
+  The input text to be processed for entity and relationship extraction.
+</ParamField>
+
+<ParamField path="{entity_types}" type="string">
+  A list of entity types to extract from the text.
+</ParamField>
+
+<ParamField path="{tuple_delimiter}" type="string">
+  A delimiter for separating values within a tuple. A single tuple is used to represent an individual entity or relationship.
+</ParamField>
+
+<ParamField path="{record_delimiter}" type="string">
+  A delimiter for separating tuple instances.
+</ParamField>
+
+<ParamField path="{completion_delimiter}" type="string">
+  An indicator for when generation is complete.
+</ParamField>
+
+#### Example usage
+
+<CodeGroup>
+```yaml settings.yaml
+entity_extraction:
+  prompt: "prompts/custom_extract_graph.txt"
+```
+
+```txt prompts/custom_extract_graph.txt
+-Goal-
+Given a text document, identify all entities and relationships from the text.
+The entity types are: {entity_types}
+
+-Steps-
+1. Identify all entities. For each identified entity, extract the following information:
+- entity_name: Name of the entity
+- entity_type: One of the following types: {entity_types}
+- entity_description: Comprehensive description of the entity's attributes and activities
+
+Format each entity as ({tuple_delimiter}<entity_name>{tuple_delimiter}<entity_type>{tuple_delimiter}<entity_description>)
+
+2. From the entities identified in step 1, identify all pairs of (source_entity, target_entity) that are *clearly related* to each other.
+For each pair of related entities, extract the following information:
+- source_entity: name of the source entity
+- target_entity: name of the target entity  
+- relationship_description: explanation of why you think the source entity and the target entity are related
+
+Format each relationship as ({tuple_delimiter}<source_entity>{tuple_delimiter}<target_entity>{tuple_delimiter}<relationship_description>)
+
+3. Return output in the following format:
+
+{record_delimiter}
+[Entity Records]
+{record_delimiter}
+[Relationship Records]
+{completion_delimiter}
+
+-Real Data-
+Text: {input_text}
+```
+</CodeGroup>
+
+### Summarize entity/relationship descriptions
+
+This prompt is used to summarize multiple descriptions of the same entity or relationship into a single coherent description.
+
+<Card title="View source" icon="github" href="https://github.com/microsoft/graphrag/blob/main/graphrag/prompts/index/summarize_descriptions.py">
+  See the default prompt implementation
+</Card>
+
+#### Available tokens
+
+<ParamField path="{entity_name}" type="string">
+  The name of the entity or the source/target pair of the relationship.
+</ParamField>
+
+<ParamField path="{description_list}" type="string">
+  A list of descriptions for the entity or relationship that need to be summarized.
+</ParamField>
+
+#### Example usage
+
+```yaml settings.yaml
+summarize_descriptions:
+  prompt: "prompts/custom_summarize_descriptions.txt"
+```
+
+### Claim extraction
+
+This prompt is used to extract claims or facts from text that could be relevant for information discovery.
+
+<Card title="View source" icon="github" href="https://github.com/microsoft/graphrag/blob/main/graphrag/prompts/index/extract_claims.py">
+  See the default prompt implementation
+</Card>
+
+#### Available tokens
+
+<ParamField path="{input_text}" type="string">
+  The input text to be processed for claim extraction.
+</ParamField>
+
+<ParamField path="{tuple_delimiter}" type="string">
+  A delimiter for separating values within a tuple. A single tuple is used to represent an individual claim.
+</ParamField>
+
+<ParamField path="{record_delimiter}" type="string">
+  A delimiter for separating tuple instances.
+</ParamField>
+
+<ParamField path="{completion_delimiter}" type="string">
+  An indicator for when generation is complete.
+</ParamField>
+
+<ParamField path="{entity_specs}" type="string">
+  A list of entity types relevant to the claims.
+</ParamField>
+
+<ParamField path="{claim_description}" type="string">
+  Description of what claims should look like. Default is: "Any claims or facts that could be relevant to information discovery."
+</ParamField>
+
+<Info>
+  See the [configuration documentation](/configuration/overview) for details on how to change the claim description.
+</Info>
+
+#### Example usage
+
+```yaml settings.yaml
+claim_extraction:
+  enabled: true
+  prompt: "prompts/custom_extract_claims.txt"
+  description: "Claims related to scientific discoveries and findings"
+```
+
+### Generate community reports
+
+This prompt is used to generate comprehensive reports for communities detected in the knowledge graph.
+
+<Card title="View source" icon="github" href="https://github.com/microsoft/graphrag/blob/main/graphrag/prompts/index/community_report.py">
+  See the default prompt implementation
+</Card>
+
+#### Available tokens
+
+<ParamField path="{input_text}" type="string">
+  The input text to generate the report with. This will contain tables of entities and relationships that belong to the community.
+</ParamField>
+
+#### Example usage
+
+```yaml settings.yaml
+community_reports:
+  prompt: "prompts/custom_community_report.txt"
+```
+
+## Query prompts
+
+These prompts are used during query operations to generate responses based on the knowledge graph.
+
+### Local search
+
+The local search prompt is used for detailed queries that focus on specific entities and their relationships.
+
+<Card title="View source" icon="github" href="https://github.com/microsoft/graphrag/blob/main/graphrag/prompts/query/local-search_system_prompt.py">
+  See the default prompt implementation
+</Card>
+
+#### Available tokens
+
+<ParamField path="{response_type}" type="string">
+  Describe how the response should look. Default is "multiple paragraphs".
+</ParamField>
+
+<ParamField path="{context_data}" type="string">
+  The data tables from GraphRAG's index containing relevant entities, relationships, and claims.
+</ParamField>
+
+#### Example usage
+
+```yaml settings.yaml
+local_search:
+  prompt: "prompts/custom_local_search.txt"
+  text_unit_prop: 0.5
+  community_prop: 0.1
+  conversation_history_max_turns: 5
+```
+
+### Global search
+
+Global search uses a map/reduce approach to summarization. You can tune these prompts independently. This search also includes the ability to adjust the use of general knowledge from the model's training.
+
+<CardGroup cols={3}>
+  <Card title="Mapper prompt" icon="map" href="https://github.com/microsoft/graphrag/blob/main/graphrag/prompts/query/global-search_map_system_prompt.py">
+    View source
+  </Card>
+  
+  <Card title="Reducer prompt" icon="compress" href="https://github.com/microsoft/graphrag/blob/main/graphrag/prompts/query/global-search_reduce_system_prompt.py">
+    View source
+  </Card>
+  
+  <Card title="Knowledge prompt" icon="brain" href="https://github.com/microsoft/graphrag/blob/main/graphrag/prompts/query/global-search_knowledge_system_prompt.py">
+    View source
+  </Card>
+</CardGroup>
+
+#### Available tokens
+
+<ParamField path="{response_type}" type="string">
+  Describe how the response should look (reducer only). Default is "multiple paragraphs".
+</ParamField>
+
+<ParamField path="{context_data}" type="string">
+  The data tables from GraphRAG's index containing community reports and summaries.
+</ParamField>
+
+#### Example usage
+
+```yaml settings.yaml
+global_search:
+  map_prompt: "prompts/custom_global_map.txt"
+  reduce_prompt: "prompts/custom_global_reduce.txt"
+  knowledge_prompt: "prompts/custom_global_knowledge.txt"
+  max_data_tokens: 12000
+```
+
+### Drift search
+
+Drift search is a hybrid approach that combines aspects of both local and global search.
+
+<Card title="View source" icon="github" href="https://github.com/microsoft/graphrag/blob/main/graphrag/prompts/query/drift-search_system_prompt.py">
+  See the default prompt implementation
+</Card>
+
+#### Available tokens
+
+<ParamField path="{response_type}" type="string">
+  Describe how the response should look. Default is "multiple paragraphs".
+</ParamField>
+
+<ParamField path="{context_data}" type="string">
+  The data tables from GraphRAG's index.
+</ParamField>
+
+<ParamField path="{community_reports}" type="string">
+  The most relevant community reports to include in the summarization.
+</ParamField>
+
+<ParamField path="{query}" type="string">
+  The query text as injected into the context.
+</ParamField>
+
+#### Example usage
+
+```yaml settings.yaml
+drift_search:
+  prompt: "prompts/custom_drift_search.txt"
+```
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Start with auto tuning" icon="lightbulb" defaultOpen>
+    Before manually tuning prompts, run auto tuning first to generate domain-adapted prompts. You can then manually refine these auto-generated prompts for even better results.
+  </Accordion>
+
+  <Accordion title="Test incrementally" icon="flask">
+    When manually tuning prompts, make small changes and test the results. Run indexing on a small subset of your data to quickly evaluate the impact of your changes.
+  </Accordion>
+
+  <Accordion title="Preserve token placeholders" icon="code">
+    Ensure that all required token placeholders (e.g., `{input_text}`, `{entity_types}`) are included in your custom prompts. Missing tokens will cause errors during execution.
+  </Accordion>
+
+  <Accordion title="Version control" icon="code-branch">
+    Keep your custom prompts in version control and document why specific changes were made. This helps with debugging and collaboration.
+  </Accordion>
+
+  <Accordion title="Review source prompts" icon="eye">
+    Click the "View source" links above to see the default prompt implementations. This will help you understand the expected structure and best practices.
+  </Accordion>
+</AccordionGroup>
+
+## Workflow
+
+<Steps>
+  <Step title="Choose a prompt to customize">
+    Identify which prompt you want to modify based on your use case (entity extraction, summarization, etc.).
+  </Step>
+  
+  <Step title="Review the default prompt">
+    Click the "View source" link to see the default implementation and understand the available tokens.
+  </Step>
+  
+  <Step title="Create a custom prompt file">
+    Write your custom prompt in a text file, ensuring all required tokens are included.
+  </Step>
+  
+  <Step title="Update settings.yaml">
+    Add the path to your custom prompt file in the appropriate section of your configuration.
+  </Step>
+  
+  <Step title="Test on sample data">
+    Run indexing on a small subset of your data to verify the prompt works correctly.
+  </Step>
+  
+  <Step title="Iterate and refine">
+    Review the results and adjust your prompt as needed. Repeat until you achieve the desired output quality.
+  </Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/configuration/overview">
+    Learn more about GraphRAG configuration options
+  </Card>
+  
+  <Card title="Indexing" icon="database" href="/indexing/overview">
+    Run the indexing pipeline with your custom prompts
+  </Card>
+  
+  <Card title="Auto tuning" icon="sparkles" href="/prompt-tuning/auto-tuning">
+    Generate domain-adapted prompts automatically
+  </Card>
+  
+  <Card title="Query operations" icon="search" href="/query/overview">
+    Use custom query prompts for better search results
+  </Card>
+</CardGroup>

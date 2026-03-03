@@ -1,0 +1,150 @@
+---
+title: Communities
+description: Community data model representing hierarchical clusters in the knowledge graph
+---
+
+## Overview
+
+The `Community` class represents a cluster of related entities in the knowledge graph. Communities are detected using graph algorithms and form a hierarchical structure with parent-child relationships. Each community aggregates entities, relationships, and text units that are semantically related.
+
+Communities inherit from the `Named` base class, which provides `id`, `short_id`, and `title` fields.
+
+## Schema
+
+### Core fields
+
+<ResponseField name="id" type="string" required>
+  Unique identifier for the community.
+</ResponseField>
+
+<ResponseField name="short_id" type="string | null">
+  Human-readable ID used to refer to this community in prompts or texts displayed to users, such as in a report text.
+</ResponseField>
+
+<ResponseField name="title" type="string" required>
+  The name/title of the community, typically describing its theme or topic.
+</ResponseField>
+
+### Hierarchy
+
+<ResponseField name="level" type="string" required>
+  Community level in the hierarchical structure. Lower levels contain more granular communities, while higher levels represent broader themes.
+</ResponseField>
+
+<ResponseField name="parent" type="string" required>
+  Community ID of the parent node of this community in the hierarchy. Root-level communities may have a null or special parent value.
+</ResponseField>
+
+<ResponseField name="children" type="string[]" required>
+  List of community IDs of the child nodes of this community. Leaf communities have an empty list.
+</ResponseField>
+
+### Relationships
+
+<ResponseField name="entity_ids" type="string[]">
+  List of entity IDs that belong to this community. These are the entities clustered together based on their relationships.
+</ResponseField>
+
+<ResponseField name="relationship_ids" type="string[]">
+  List of relationship IDs that connect entities within this community.
+</ResponseField>
+
+<ResponseField name="text_unit_ids" type="string[]">
+  List of text unit IDs related to the community. These are the source text chunks that mention entities or relationships in this community.
+</ResponseField>
+
+<ResponseField name="covariate_ids" type="object">
+  Dictionary mapping covariate types to lists of covariate IDs. For example, `{"claim": ["claim1", "claim2"]}` associates claims with the community.
+</ResponseField>
+
+### Metadata
+
+<ResponseField name="attributes" type="object">
+  A dictionary of additional attributes associated with the community. These attributes are included in search prompts and can contain custom metadata.
+</ResponseField>
+
+<ResponseField name="size" type="integer">
+  The size of the community, measured as the number of text units associated with it. Larger communities represent more prevalent themes.
+</ResponseField>
+
+<ResponseField name="period" type="string">
+  Temporal period associated with the community, if applicable.
+</ResponseField>
+
+## Example
+
+```json
+{
+  "id": "c1234567-89ab-cdef-0123-456789abcdef",
+  "short_id": "0",
+  "title": "Technology Leadership",
+  "level": "1",
+  "parent": "c-root",
+  "children": ["c2", "c3"],
+  "entity_ids": ["e1", "e2", "e3"],
+  "relationship_ids": ["r1", "r2"],
+  "text_unit_ids": ["t1", "t2", "t3", "t4"],
+  "covariate_ids": {
+    "claim": ["claim1", "claim2"]
+  },
+  "attributes": {
+    "theme": "corporate leadership",
+    "industry": "technology"
+  },
+  "size": 4,
+  "period": "2020-2024"
+}
+```
+
+## Creating from dictionary
+
+The `Community` class provides a `from_dict()` class method to create instances from dictionary data:
+
+```python
+community = Community.from_dict({
+    "id": "c1234567-89ab-cdef-0123-456789abcdef",
+    "title": "Technology Leadership",
+    "level": "1",
+    "parent": "c-root",
+    "children": ["c2", "c3"],
+    "entity_ids": ["e1", "e2", "e3"],
+    "relationship_ids": ["r1", "r2"],
+    "text_unit_ids": ["t1", "t2", "t3"],
+    "size": 3
+})
+```
+
+<Expandable title="Custom key mapping">
+  The `from_dict()` method accepts custom key names for flexible data import:
+  
+  - `id_key`: Key for the community ID (default: "id")
+  - `title_key`: Key for the community title (default: "title")
+  - `short_id_key`: Key for the human-readable ID (default: "human_readable_id")
+  - `level_key`: Key for the hierarchy level (default: "level")
+  - `entities_key`: Key for entity IDs (default: "entity_ids")
+  - `relationships_key`: Key for relationship IDs (default: "relationship_ids")
+  - `text_units_key`: Key for text unit IDs (default: "text_unit_ids")
+  - `covariates_key`: Key for covariate IDs (default: "covariate_ids")
+  - `parent_key`: Key for parent community ID (default: "parent")
+  - `children_key`: Key for child community IDs (default: "children")
+  - `attributes_key`: Key for additional attributes (default: "attributes")
+  - `size_key`: Key for community size (default: "size")
+  - `period_key`: Key for temporal period (default: "period")
+</Expandable>
+
+## Hierarchical structure
+
+Communities form a tree structure where:
+
+- **Leaf communities** (level 0): Most specific clusters with no children
+- **Intermediate communities**: Aggregate multiple child communities
+- **Root communities**: Top-level themes that encompass broad topics
+
+This hierarchy enables multi-scale querying, where you can retrieve information at different levels of abstraction based on the query complexity.
+
+## Use cases
+
+- **Summarization**: Generate summaries at different levels of detail
+- **Topic clustering**: Group related entities and relationships by theme
+- **Hierarchical search**: Query at appropriate abstraction levels
+- **Context aggregation**: Combine information from related text units

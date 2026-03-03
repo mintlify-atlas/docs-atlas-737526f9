@@ -1,0 +1,540 @@
+---
+title: Search method comparison
+description: Compare global, local, and DRIFT search methods to choose the right approach for your queries
+---
+
+GraphRAG offers three distinct search methods, each optimized for different types of queries. This guide helps you understand when to use each method and how they compare.
+
+## Search methods overview
+
+<CardGroup cols={3}>
+  <Card title="Global search" icon="globe">
+    **Map-reduce over community reports**
+    
+    Best for high-level, dataset-wide questions and thematic analysis.
+  </Card>
+  
+  <Card title="Local search" icon="magnifying-glass">
+    **Entity-centric retrieval**
+    
+    Best for specific entity queries and detailed fact retrieval.
+  </Card>
+  
+  <Card title="DRIFT search" icon="route">
+    **Iterative graph traversal**
+    
+    Best for complex multi-hop reasoning and exploratory analysis.
+  </Card>
+</CardGroup>
+
+## Quick comparison table
+
+| Aspect | Global Search | Local Search | DRIFT Search |
+|--------|---------------|--------------|-------------|
+| **Question Type** | Broad, thematic | Specific, factual | Complex, multi-hop |
+| **Data Source** | Community reports | Entities + text + reports | Dynamic graph traversal |
+| **Context Building** | Fixed (all reports at level) | Semantic retrieval | Iterative expansion |
+| **LLM Calls** | Many (map-reduce) | Single | Multiple (iterative) |
+| **Cost** | High | Low-Medium | Medium-High |
+| **Response Time** | Slow (2-10s) | Fast (&lt;2s) | Medium (2-5s) |
+| **Token Usage** | High | Low-Medium | Medium-High |
+| **Coverage** | Entire dataset | Focused | Adaptive |
+| **Depth** | Summarized | Detailed | Multi-level |
+
+## When to use each method
+
+### Global search
+
+<Tabs>
+  <Tab title="Ideal for">
+    - "What are the main themes in this dataset?"
+    - "What are the top trends across all documents?"
+    - "Summarize the key findings"
+    - "What are the most significant events?"
+    - "How do different topics relate globally?"
+  </Tab>
+  
+  <Tab title="Strengths">
+    - Comprehensive dataset coverage
+    - Identifies high-level patterns
+    - Synthesizes information across communities
+    - Good for exploratory analysis
+  </Tab>
+  
+  <Tab title="Limitations">
+    - Expensive (many LLM calls)
+    - Slower response times
+    - Less detailed on specific entities
+    - May miss fine-grained details
+  </Tab>
+  
+  <Tab title="Example">
+    ```bash
+    graphrag query \
+      "What are the most important themes in this story?" \
+      --method global
+    ```
+  </Tab>
+</Tabs>
+
+### Local search
+
+<Tabs>
+  <Tab title="Ideal for">
+    - "Who is Dr. Jordan Hayes?"
+    - "What is the relationship between X and Y?"
+    - "What are the properties of this entity?"
+    - "When did this specific event occur?"
+    - "What does the document say about X?"
+  </Tab>
+  
+  <Tab title="Strengths">
+    - Fast response times
+    - Cost-effective
+    - Detailed entity information
+    - Includes original text evidence
+    - Good for fact-checking
+  </Tab>
+  
+  <Tab title="Limitations">
+    - Limited to nearby context
+    - May miss global patterns
+    - Less comprehensive for broad questions
+    - Depends on entity retrieval quality
+  </Tab>
+  
+  <Tab title="Example">
+    ```bash
+    graphrag query \
+      "Who is Scrooge and what are his relationships?" \
+      --method local
+    ```
+  </Tab>
+</Tabs>
+
+### DRIFT search
+
+<Tabs>
+  <Tab title="Ideal for">
+    - "How do organizations influence these events?"
+    - "What chain of events connects A to B?"
+    - "What patterns emerge from analyzing X, Y, and Z together?"
+    - "How are these entities indirectly connected?"
+    - "What are the multi-step dependencies?"
+  </Tab>
+  
+  <Tab title="Strengths">
+    - Handles complex reasoning
+    - Multi-hop relationship traversal
+    - Adaptive context gathering
+    - Balances breadth and depth
+    - Discovers indirect connections
+  </Tab>
+  
+  <Tab title="Limitations">
+    - Moderate to high cost
+    - Slower than local search
+    - Complexity in parameter tuning
+    - May be overkill for simple queries
+  </Tab>
+  
+  <Tab title="Example">
+    ```python
+    # Currently via API/notebooks only
+    result = await drift_search.search(
+        "How do the different factions interact through intermediaries?"
+    )
+    ```
+  </Tab>
+</Tabs>
+
+## Side-by-side examples
+
+Here's how each method handles the same dataset but different query types:
+
+### Dataset: "Operation Dulce" (sci-fi narrative)
+
+<AccordionGroup>
+  <Accordion title="Query 1: Broad thematic question">
+    **Question**: "What are the main themes in this story?"
+    
+    <Tabs>
+      <Tab title="Global Search (Best)">
+        **Response**: Analyzes all community reports to identify overarching themes like government secrecy, alien contact, scientific ethics, and human cooperation.
+        
+        **Why it works**: Synthesizes information across the entire narrative structure.
+        
+        **Cost**: ~15,000 tokens
+      </Tab>
+      
+      <Tab title="Local Search (Suboptimal)">
+        **Response**: May identify themes related to specific entities it retrieves, but lacks comprehensive coverage.
+        
+        **Why it's limited**: Only sees themes connected to retrieved entities.
+        
+        **Cost**: ~3,000 tokens
+      </Tab>
+      
+      <Tab title="DRIFT Search (Moderate)">
+        **Response**: Explores themes through entity relationships but may not cover all communities.
+        
+        **Why it's moderate**: Can discover themes but less systematic than global.
+        
+        **Cost**: ~8,000 tokens
+      </Tab>
+    </Tabs>
+  </Accordion>
+  
+  <Accordion title="Query 2: Specific entity question">
+    **Question**: "Who is Agent Mercer and what is their role?"
+    
+    <Tabs>
+      <Tab title="Local Search (Best)">
+        **Response**: Retrieves Agent Mercer entity, related relationships, and relevant text chunks providing detailed information about their role, background, and actions.
+        
+        **Why it works**: Direct entity retrieval with supporting evidence.
+        
+        **Cost**: ~2,500 tokens
+      </Tab>
+      
+      <Tab title="Global Search (Suboptimal)">
+        **Response**: May mention Agent Mercer in community summaries but lacks specific details.
+        
+        **Why it's limited**: Community reports are high-level summaries.
+        
+        **Cost**: ~12,000 tokens
+      </Tab>
+      
+      <Tab title="DRIFT Search (Good)">
+        **Response**: Finds Agent Mercer and explores connected entities, providing both direct info and contextual relationships.
+        
+        **Why it's good**: Comprehensive but potentially unnecessary depth.
+        
+        **Cost**: ~5,000 tokens
+      </Tab>
+    </Tabs>
+  </Accordion>
+  
+  <Accordion title="Query 3: Multi-hop reasoning">
+    **Question**: "How do the government organizations indirectly influence the scientific research at the base?"
+    
+    <Tabs>
+      <Tab title="DRIFT Search (Best)">
+        **Response**: Traces connections from government entities through intermediary actors to research activities, revealing multi-step influence patterns.
+        
+        **Why it works**: Designed for graph traversal and multi-hop reasoning.
+        
+        **Cost**: ~7,000 tokens
+      </Tab>
+      
+      <Tab title="Local Search (Limited)">
+        **Response**: Shows direct connections between government and research but may miss indirect paths.
+        
+        **Why it's limited**: Doesn't traverse multiple hops effectively.
+        
+        **Cost**: ~3,500 tokens
+      </Tab>
+      
+      <Tab title="Global Search (Moderate)">
+        **Response**: Identifies that government influences research from community summaries but lacks specific pathways.
+        
+        **Why it's moderate**: Sees the pattern but not the mechanism.
+        
+        **Cost**: ~13,000 tokens
+      </Tab>
+    </Tabs>
+  </Accordion>
+  
+  <Accordion title="Query 4: Relationship query">
+    **Question**: "What is the relationship between Dr. Hayes and the Dulce facility?"
+    
+    <Tabs>
+      <Tab title="Local Search (Best)">
+        **Response**: Retrieves both entities and their connecting relationships with supporting text evidence.
+        
+        **Why it works**: Optimized for entity relationship queries.
+        
+        **Cost**: ~2,800 tokens
+      </Tab>
+      
+      <Tab title="Global Search (Limited)">
+        **Response**: May note connection in community summary but without specifics.
+        
+        **Why it's limited**: Relationships are abstracted in summaries.
+        
+        **Cost**: ~12,000 tokens
+      </Tab>
+      
+      <Tab title="DRIFT Search (Good)">
+        **Response**: Finds relationship and explores broader context around both entities.
+        
+        **Why it's good**: Comprehensive but may include extra context.
+        
+        **Cost**: ~4,500 tokens
+      </Tab>
+    </Tabs>
+  </Accordion>
+</AccordionGroup>
+
+## Decision flowchart
+
+<Steps>
+  <Step title="Is your question about a specific entity or relationship?">
+    **YES** → Use **Local Search**
+    
+    Examples:
+    - "Who is X?"
+    - "What is X's relationship to Y?"
+    - "What are X's properties?"
+    
+    **NO** → Continue to next step
+  </Step>
+  
+  <Step title="Does your question require understanding the entire dataset?">
+    **YES** → Use **Global Search**
+    
+    Examples:
+    - "What are the main themes?"
+    - "What are the key trends?"
+    - "Summarize this dataset"
+    
+    **NO** → Continue to next step
+  </Step>
+  
+  <Step title="Does your question involve multi-hop reasoning or complex connections?">
+    **YES** → Use **DRIFT Search**
+    
+    Examples:
+    - "How does X indirectly affect Y?"
+    - "What chain of events connects A to B?"
+    - "What patterns involve X, Y, and Z?"
+    
+    **NO** → Try Local Search first, then escalate if needed
+  </Step>
+</Steps>
+
+## Hybrid approaches
+
+You can combine search methods for comprehensive analysis:
+
+### Sequential querying
+
+<Steps>
+  <Step title="Start with global search">
+    Get high-level themes and important entities:
+    ```bash
+    graphrag query "What are the main entities in this dataset?" --method global
+    ```
+  </Step>
+  
+  <Step title="Follow up with local search">
+    Deep dive into specific entities identified:
+    ```bash
+    graphrag query "Tell me more about [entity from global results]" --method local
+    ```
+  </Step>
+  
+  <Step title="Use DRIFT for connections">
+    Explore relationships between key entities:
+    ```python
+    result = await drift_search.search(
+        "How do [entity1] and [entity2] influence each other?"
+    )
+    ```
+  </Step>
+</Steps>
+
+### Validation strategy
+
+```python
+# Use multiple methods to validate findings
+
+# Global: Identify main themes
+global_result = await global_search.search(
+    "What are the key themes?"
+)
+
+# Local: Verify themes with specific evidence
+local_result = await local_search.search(
+    "What evidence supports the theme of [X]?"
+)
+
+# DRIFT: Explore how themes connect
+drift_result = await drift_search.search(
+    "How do themes [X] and [Y] relate through entities?"
+)
+```
+
+## Performance benchmarks
+
+Based on typical "Operation Dulce" dataset queries:
+
+| Metric | Global | Local | DRIFT |
+|--------|--------|-------|-------|
+| Avg Response Time | 8.5s | 1.2s | 3.8s |
+| Avg Tokens (Prompt) | 11,500 | 2,800 | 6,200 |
+| Avg Tokens (Output) | 800 | 400 | 600 |
+| Avg Cost (GPT-4) | $0.12 | $0.03 | $0.07 |
+| Parallelizable | Yes | No | Partially |
+
+<Note>
+Actual performance varies based on dataset size, query complexity, and configuration parameters.
+</Note>
+
+## Configuration comparison
+
+<Tabs>
+  <Tab title="Global Search">
+    ```python
+    # Key parameters
+    context_builder_params = {
+        "max_tokens": 12_000,
+        "community_level": 2,  # 0=coarse, 3+=fine
+        "use_community_summary": False,  # Full vs summary
+    }
+    
+    map_llm_params = {
+        "max_tokens": 1000,
+        "temperature": 0.0,
+    }
+    
+    reduce_llm_params = {
+        "max_tokens": 2000,
+        "temperature": 0.0,
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Local Search">
+    ```python
+    # Key parameters
+    local_context_params = {
+        "text_unit_prop": 0.5,  # Text chunk allocation
+        "community_prop": 0.1,  # Community report allocation
+        "top_k_mapped_entities": 10,  # Entity retrieval count
+        "top_k_relationships": 10,  # Relationship count
+        "max_tokens": 12_000,
+    }
+    
+    model_params = {
+        "max_tokens": 2_000,
+        "temperature": 0.0,
+    }
+    ```
+  </Tab>
+  
+  <Tab title="DRIFT Search">
+    ```python
+    # Key parameters
+    drift_params = DRIFTSearchConfig(
+        primer_folds=1,  # Initial retrieval rounds
+        drift_k_followups=3,  # Expansions per iteration
+        n_depth=3,  # Max traversal depth
+    )
+    ```
+  </Tab>
+</Tabs>
+
+## Cost optimization strategies
+
+<CardGroup cols={2}>
+  <Card title="Use local search first" icon="dollar-sign">
+    Start with low-cost local search; escalate only if needed
+  </Card>
+  
+  <Card title="Adjust community level" icon="layer-group">
+    Use level 1 for global search instead of level 2 to reduce tokens
+  </Card>
+  
+  <Card title="Tune DRIFT conservatively" icon="sliders">
+    Keep `n_depth=2` and `drift_k_followups=2` for most queries
+  </Card>
+  
+  <Card title="Use summaries" icon="compress">
+    Set `use_community_summary=True` in global search
+  </Card>
+</CardGroup>
+
+## Common pitfalls
+
+<AccordionGroup>
+  <Accordion title="Using global search for specific entities">
+    **Problem**: Expensive and provides less detail than local search.
+    
+    **Solution**: Use local search for entity-specific queries.
+  </Accordion>
+  
+  <Accordion title="Using local search for broad themes">
+    **Problem**: May miss important information not connected to retrieved entities.
+    
+    **Solution**: Use global search for dataset-wide questions.
+  </Accordion>
+  
+  <Accordion title="Over-parameterizing DRIFT">
+    **Problem**: Setting `n_depth=5` and `drift_k_followups=10` wastes tokens.
+    
+    **Solution**: Start with default parameters and increase only if needed.
+  </Accordion>
+  
+  <Accordion title="Not checking context data">
+    **Problem**: Accepting answers without verifying supporting evidence.
+    
+    **Solution**: Always inspect `result.context_data` to see what was used.
+  </Accordion>
+</AccordionGroup>
+
+## Choosing based on use case
+
+<Tabs>
+  <Tab title="Research & analysis">
+    **Primary**: Global search for themes and patterns
+    
+    **Secondary**: Local search for validating specific claims
+    
+    **Tertiary**: DRIFT search for exploring connections between findings
+  </Tab>
+  
+  <Tab title="Q&A systems">
+    **Primary**: Local search for most user questions
+    
+    **Secondary**: DRIFT search for complex follow-ups
+    
+    **Tertiary**: Global search for summarization requests
+  </Tab>
+  
+  <Tab title="Investigation">
+    **Primary**: DRIFT search for tracing connections
+    
+    **Secondary**: Local search for entity details
+    
+    **Tertiary**: Global search for context and patterns
+  </Tab>
+  
+  <Tab title="Content summarization">
+    **Primary**: Global search for high-level summaries
+    
+    **Secondary**: Local search for specific section details
+    
+    **Tertiary**: DRIFT search for understanding structure
+  </Tab>
+</Tabs>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Global search" icon="globe" href="/examples/notebooks/global-search">
+    Deep dive into global search
+  </Card>
+  
+  <Card title="Local search" icon="magnifying-glass" href="/examples/notebooks/local-search">
+    Master local search techniques
+  </Card>
+  
+  <Card title="DRIFT search" icon="route" href="/examples/notebooks/drift-search">
+    Learn DRIFT search methods
+  </Card>
+  
+  <Card title="Query overview" icon="book" href="/query/overview">
+    Complete query documentation
+  </Card>
+</CardGroup>

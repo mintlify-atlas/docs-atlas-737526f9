@@ -1,0 +1,205 @@
+---
+title: Initialization
+description: Initialize GraphRAG projects with the init command
+---
+
+The `graphrag init` command is the easiest way to get started with GraphRAG. It creates a complete project structure with configuration files, environment variables, and default prompts.
+
+## Usage
+
+```bash
+graphrag init [--root PATH] [--force, --no-force]
+```
+
+### Options
+
+<ParamField path="--root" type="string" default="current directory">
+  The project root directory to initialize GraphRAG at
+</ParamField>
+
+<ParamField path="--force" type="boolean" default="false">
+  Overwrite existing configuration and prompt files if they exist
+</ParamField>
+
+## Example
+
+Initialize a new GraphRAG project in a specific directory:
+
+```bash
+graphrag init --root ./ragtest
+```
+
+This creates a complete project structure:
+
+```
+ragtest/
+├── settings.yaml      # Main configuration file
+├── .env              # Environment variables
+└── prompts/          # LLM prompt templates
+    ├── extract_graph.txt
+    ├── summarize_descriptions.txt
+    ├── community_report_graph.txt
+    └── ...
+```
+
+## Generated files
+
+### settings.yaml
+
+The main configuration file containing all GraphRAG settings:
+
+```yaml settings.yaml
+### LLM settings ###
+completion_models:
+  default_completion_model:
+    model_provider: openai
+    model: gpt-4.1
+    auth_method: api_key
+    api_key: ${GRAPHRAG_API_KEY}
+    retry:
+      type: exponential_backoff
+
+embedding_models:
+  default_embedding_model:
+    model_provider: openai
+    model: text-embedding-3-large
+    auth_method: api_key
+    api_key: ${GRAPHRAG_API_KEY}
+    retry:
+      type: exponential_backoff
+
+### Document processing settings ###
+input:
+  type: text  # [csv, text, json, jsonl]
+
+chunking:
+  type: tokens
+  size: 1200
+  overlap: 100
+  encoding_model: o200k_base
+
+### Storage settings ###
+input_storage:
+  type: file  # [file, blob, cosmosdb]
+  base_dir: "input"
+
+output_storage:
+  type: file  # [file, blob, cosmosdb]
+  base_dir: "output"
+
+cache:
+  type: json  # [json, memory, none]
+  storage:
+    type: file  # [file, blob, cosmosdb]
+    base_dir: "cache"
+
+vector_store:
+  type: lancedb
+  db_uri: output/lancedb
+
+### Workflow settings ###
+extract_graph:
+  completion_model_id: default_completion_model
+  prompt: "prompts/extract_graph.txt"
+  entity_types: [organization, person, geo, event]
+  max_gleanings: 1
+```
+
+<Tip>
+See the [settings reference](/configuration/settings) for complete documentation of all available options.
+</Tip>
+
+### .env
+
+Environment variables file for storing sensitive credentials:
+
+```bash .env
+GRAPHRAG_API_KEY=<API_KEY>
+```
+
+<Warning>
+Never commit your `.env` file to version control. Add it to `.gitignore` to keep your API keys secure.
+</Warning>
+
+### prompts/
+
+The prompts directory contains default LLM prompt templates that you can customize:
+
+<CardGroup cols={2}>
+  <Card title="extract_graph.txt" icon="diagram-project">
+    Prompt for extracting entities and relationships from text
+  </Card>
+  <Card title="summarize_descriptions.txt" icon="compress">
+    Prompt for summarizing entity descriptions
+  </Card>
+  <Card title="community_report_graph.txt" icon="users">
+    Prompt for generating graph-based community reports
+  </Card>
+  <Card title="community_report_text.txt" icon="file-lines">
+    Prompt for generating text-based community reports
+  </Card>
+</CardGroup>
+
+Additional prompt files include:
+- `extract_claims.txt` - Claim extraction (disabled by default)
+- `local_search_system_prompt.txt` - Local search queries
+- `global_search_map_system_prompt.txt` - Global search mapping
+- `global_search_reduce_system_prompt.txt` - Global search reduction
+- `drift_search_system_prompt.txt` - DRIFT search queries
+- `basic_search_system_prompt.txt` - Basic search queries
+
+## Customizing prompts
+
+You can modify the generated prompts to better suit your domain:
+
+<Steps>
+  <Step title="Edit prompt files">
+    Open and modify the prompt files in the `prompts/` directory
+  </Step>
+  <Step title="Test with your data">
+    Run indexing to see how the modified prompts perform
+  </Step>
+  <Step title="Iterate and refine">
+    Adjust prompts based on extraction quality and results
+  </Step>
+</Steps>
+
+<Info>
+For data-adapted prompts, run the [Auto Prompt Tuning](/prompt-tuning/overview) command after initialization.
+</Info>
+
+## Using the --force flag
+
+By default, `init` will not overwrite existing files. Use `--force` to regenerate:
+
+```bash
+graphrag init --root ./ragtest --force
+```
+
+<Warning>
+The `--force` flag will overwrite:
+- `settings.yaml`
+- `.env` (your API keys will be lost)
+- All files in `prompts/`
+
+Back up any customizations before using `--force`.
+</Warning>
+
+## Next steps
+
+After initialization, you're ready to:
+
+<CardGroup cols={2}>
+  <Card title="Configure API keys" icon="key">
+    Edit `.env` to add your language model API credentials
+  </Card>
+  <Card title="Add source documents" icon="folder">
+    Place your documents in the `input/` directory
+  </Card>
+  <Card title="Tune prompts" icon="wand-magic-sparkles" href="/prompt-tuning/overview">
+    Run auto prompt tuning to adapt prompts to your data
+  </Card>
+  <Card title="Start indexing" icon="play" href="/indexing/overview">
+    Run `graphrag index` to process your documents
+  </Card>
+</CardGroup>

@@ -1,0 +1,118 @@
+---
+title: Entities
+description: Entity data model representing nodes in the knowledge graph
+---
+
+## Overview
+
+The `Entity` class represents a node in the knowledge graph. Entities are extracted from documents and represent real-world objects, concepts, or actors mentioned in the text. Each entity can be associated with multiple communities, text units, and has optional embeddings for semantic search.
+
+Entities inherit from the `Named` base class, which provides `id`, `short_id`, and `title` fields.
+
+## Schema
+
+### Core fields
+
+<ResponseField name="id" type="string" required>
+  Unique identifier for the entity.
+</ResponseField>
+
+<ResponseField name="short_id" type="string | null">
+  Human-readable ID used to refer to this entity in prompts or texts displayed to users, such as in a report text.
+</ResponseField>
+
+<ResponseField name="title" type="string" required>
+  The name/title of the entity.
+</ResponseField>
+
+<ResponseField name="type" type="string | null">
+  Type of the entity. Can be any string representing the entity category (e.g., "Person", "Organization", "Location").
+</ResponseField>
+
+<ResponseField name="description" type="string | null">
+  Textual description of the entity explaining its role, characteristics, or context.
+</ResponseField>
+
+### Embeddings
+
+<ResponseField name="description_embedding" type="float[]">
+  The semantic (text) embedding vector of the entity's description. Used for similarity search and semantic queries.
+</ResponseField>
+
+<ResponseField name="name_embedding" type="float[]">
+  The semantic (text) embedding vector of the entity's name. Used for entity matching and retrieval.
+</ResponseField>
+
+### Relationships
+
+<ResponseField name="community_ids" type="string[]">
+  List of community IDs that this entity belongs to. Entities can be members of multiple communities at different hierarchical levels.
+</ResponseField>
+
+<ResponseField name="text_unit_ids" type="string[]">
+  List of text unit IDs in which the entity appears. Links the entity back to its source text chunks.
+</ResponseField>
+
+### Metadata
+
+<ResponseField name="rank" type="integer" default={1}>
+  Rank of the entity, used for sorting and prioritization. Higher rank indicates more important entity. This can be based on centrality metrics or other importance measures.
+</ResponseField>
+
+<ResponseField name="attributes" type="object">
+  Additional attributes associated with the entity (e.g., start time, end time, custom metadata). These attributes are included in search prompts.
+</ResponseField>
+
+## Example
+
+```json
+{
+  "id": "e1234567-89ab-cdef-0123-456789abcdef",
+  "short_id": "0",
+  "title": "Microsoft Corporation",
+  "type": "Organization",
+  "description": "A multinational technology company that develops software, hardware, and cloud services",
+  "description_embedding": [0.123, -0.456, 0.789, ...],
+  "name_embedding": [0.234, -0.567, 0.890, ...],
+  "community_ids": ["c1", "c2"],
+  "text_unit_ids": ["t1", "t2", "t3"],
+  "rank": 10,
+  "attributes": {
+    "founded": "1975",
+    "industry": "Technology"
+  }
+}
+```
+
+## Creating from dictionary
+
+The `Entity` class provides a `from_dict()` class method to create instances from dictionary data:
+
+```python
+entity = Entity.from_dict({
+    "id": "e1234567-89ab-cdef-0123-456789abcdef",
+    "title": "Microsoft Corporation",
+    "type": "Organization",
+    "description": "A multinational technology company",
+    "degree": 10,  # Maps to rank
+    "community": ["c1", "c2"],  # Maps to community_ids
+    "text_unit_ids": ["t1", "t2"],
+    "attributes": {"founded": "1975"}
+})
+```
+
+<Expandable title="Custom key mapping">
+  The `from_dict()` method accepts custom key names for flexible data import:
+  
+  - `id_key`: Key for the entity ID (default: "id")
+  - `short_id_key`: Key for the human-readable ID (default: "human_readable_id")
+  - `title_key`: Key for the entity title (default: "title")
+  - `type_key`: Key for the entity type (default: "type")
+  - `description_key`: Key for the description (default: "description")
+  - `description_embedding_key`: Key for description embedding (default: "description_embedding")
+  - `name_embedding_key`: Key for name embedding (default: "name_embedding")
+  - `community_key`: Key for community IDs (default: "community")
+  - `text_unit_ids_key`: Key for text unit IDs (default: "text_unit_ids")
+  - `rank_key`: Key for rank value (default: "degree")
+  - `attributes_key`: Key for additional attributes (default: "attributes")
+</Expandable>

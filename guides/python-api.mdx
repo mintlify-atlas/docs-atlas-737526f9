@@ -1,0 +1,614 @@
+---
+title: Python API
+description: Use GraphRAG programmatically in your Python applications with the indexing and query API
+---
+
+The GraphRAG Python API allows you to integrate knowledge graph indexing and querying directly into your Python applications. This provides fine-grained control over the indexing pipeline and query execution.
+
+<Warning>
+  This API is under development and may undergo changes in future releases. Backwards compatibility is not guaranteed at this time.
+</Warning>
+
+## Installation
+
+```bash
+pip install graphrag
+```
+
+## API overview
+
+GraphRAG provides three main API modules:
+
+<CardGroup cols={3}>
+  <Card title="Indexing API" icon="chart-network">
+    Build knowledge graph indexes from your data
+  </Card>
+  <Card title="Query API" icon="magnifying-glass">
+    Search and query your knowledge graphs
+  </Card>
+  <Card title="Prompt tuning API" icon="wand-magic-sparkles">
+    Generate custom prompts for your domain
+  </Card>
+</CardGroup>
+
+## Indexing API
+
+The indexing API allows you to build knowledge graph indexes programmatically.
+
+### Import the API
+
+```python
+from graphrag.api import build_index
+from graphrag.config.models.graph_rag_config import GraphRagConfig
+from graphrag.config.enums import IndexingMethod
+```
+
+### Basic indexing
+
+Create a simple indexing pipeline:
+
+```python
+import asyncio
+from pathlib import Path
+from graphrag.api import build_index
+from graphrag.config.models.graph_rag_config import GraphRagConfig
+
+# Load configuration from settings.yaml
+config = GraphRagConfig.from_file("./my-project/settings.yaml")
+
+# Run the indexing pipeline
+async def run_index():
+    results = await build_index(
+        config=config,
+        method=IndexingMethod.Standard,
+        verbose=True
+    )
+    
+    for result in results:
+        if result.error is None:
+            print(f"Workflow {result.workflow} completed successfully")
+        else:
+            print(f"Workflow {result.workflow} failed: {result.error}")
+
+# Execute
+asyncio.run(run_index())
+```
+
+### Advanced indexing options
+
+<CodeGroup>
+```python With callbacks
+from graphrag.callbacks.workflow_callbacks import WorkflowCallbacks
+
+class MyCallbacks(WorkflowCallbacks):
+    def on_workflow_start(self, name: str, instance: object) -> None:
+        print(f"Starting workflow: {name}")
+    
+    def on_workflow_end(self, name: str, result: object) -> None:
+        print(f"Completed workflow: {name}")
+    
+    def on_error(self, error: Exception, stack_trace: str) -> None:
+        print(f"Error occurred: {error}")
+
+results = await build_index(
+    config=config,
+    callbacks=[MyCallbacks()],
+    verbose=True
+)
+```
+
+```python Update mode
+# Incrementally update an existing index
+results = await build_index(
+    config=config,
+    method=IndexingMethod.Standard,
+    is_update_run=True,
+    verbose=True
+)
+```
+
+```python Custom input documents
+import pandas as pd
+
+# Provide your own dataframe instead of loading from files
+documents = pd.DataFrame({
+    'id': ['doc1', 'doc2'],
+    'text': ['Document 1 content...', 'Document 2 content...'],
+    'title': ['Document 1', 'Document 2']
+})
+
+results = await build_index(
+    config=config,
+    input_documents=documents,
+    verbose=True
+)
+```
+
+```python With additional context
+# Pass custom context to the pipeline
+results = await build_index(
+    config=config,
+    additional_context={
+        'dataset_name': 'research_papers',
+        'processing_date': '2024-03-15',
+        'custom_metadata': {'version': '1.0'}
+    },
+    verbose=True
+)
+```
+</CodeGroup>
+
+### build_index parameters
+
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|--------|
+| `config` | `GraphRagConfig` | The GraphRAG configuration | Required |
+| `method` | `IndexingMethod \| str` | Indexing method to use | `IndexingMethod.Standard` |
+| `is_update_run` | `bool` | Whether this is an incremental update | `False` |
+| `callbacks` | `list[WorkflowCallbacks]` | Callbacks for pipeline events | `None` |
+| `additional_context` | `dict[str, Any]` | Custom context for the pipeline | `None` |
+| `verbose` | `bool` | Enable verbose logging | `False` |
+| `input_documents` | `pd.DataFrame` | Override document loading with custom dataframe | `None` |
+
+## Query API
+
+The query API provides four search methods for querying your knowledge graph.
+
+### Import the API
+
+```python
+from graphrag.api import (
+    global_search,
+    global_search_streaming,
+    local_search,
+    local_search_streaming,
+    drift_search,
+    drift_search_streaming,
+    basic_search,
+    basic_search_streaming
+)
+from graphrag.config.models.graph_rag_config import GraphRagConfig
+import pandas as pd
+```
+
+### Loading index data
+
+Before querying, load the required parquet files:
+
+```python
+import pandas as pd
+from pathlib import Path
+
+# Define your output directory
+output_dir = Path("./my-project/output")
+
+# Load required tables
+entities = pd.read_parquet(output_dir / "entities.parquet")
+communities = pd.read_parquet(output_dir / "communities.parquet")
+community_reports = pd.read_parquet(output_dir / "community_reports.parquet")
+text_units = pd.read_parquet(output_dir / "text_units.parquet")
+relationships = pd.read_parquet(output_dir / "relationships.parquet")
+
+# Optional: load covariates if you extracted claims
+try:
+    covariates = pd.read_parquet(output_dir / "covariates.parquet")
+except FileNotFoundError:
+    covariates = None
+```
+
+### Global search
+
+Use global search for high-level questions about the entire dataset:
+
+<CodeGroup>
+```python Basic global search
+import asyncio
+from graphrag.api import global_search
+from graphrag.config.models.graph_rag_config import GraphRagConfig
+
+config = GraphRagConfig.from_file("./my-project/settings.yaml")
+
+async def run_global_search():
+    response, context = await global_search(
+        config=config,
+        entities=entities,
+        communities=communities,
+        community_reports=community_reports,
+        community_level=2,
+        dynamic_community_selection=False,
+        response_type="Multiple Paragraphs",
+        query="What are the main themes in the dataset?"
+    )
+    
+    print("Response:", response)
+    print("Context:", context)
+
+asyncio.run(run_global_search())
+```
+
+```python Streaming global search
+from graphrag.api import global_search_streaming
+
+async def run_streaming_global_search():
+    async for chunk in global_search_streaming(
+        config=config,
+        entities=entities,
+        communities=communities,
+        community_reports=community_reports,
+        community_level=2,
+        dynamic_community_selection=False,
+        response_type="Multiple Paragraphs",
+        query="What are the main themes in the dataset?"
+    ):
+        print(chunk, end='', flush=True)
+
+asyncio.run(run_streaming_global_search())
+```
+
+```python Dynamic community selection
+# Let the algorithm choose optimal communities
+response, context = await global_search(
+    config=config,
+    entities=entities,
+    communities=communities,
+    community_reports=community_reports,
+    community_level=None,  # No level cap
+    dynamic_community_selection=True,
+    response_type="Multiple Paragraphs",
+    query="What are the main themes?"
+)
+```
+</CodeGroup>
+
+### Local search
+
+Use local search for specific entity-focused queries:
+
+<CodeGroup>
+```python Basic local search
+from graphrag.api import local_search
+
+async def run_local_search():
+    response, context = await local_search(
+        config=config,
+        entities=entities,
+        communities=communities,
+        community_reports=community_reports,
+        text_units=text_units,
+        relationships=relationships,
+        covariates=covariates,
+        community_level=2,
+        response_type="Multiple Paragraphs",
+        query="Tell me about John Smith"
+    )
+    
+    print("Response:", response)
+    print("Context:", context)
+
+asyncio.run(run_local_search())
+```
+
+```python Streaming local search
+from graphrag.api import local_search_streaming
+
+async def run_streaming_local_search():
+    async for chunk in local_search_streaming(
+        config=config,
+        entities=entities,
+        communities=communities,
+        community_reports=community_reports,
+        text_units=text_units,
+        relationships=relationships,
+        covariates=covariates,
+        community_level=2,
+        response_type="List of 3-7 Points",
+        query="What did John Smith accomplish?"
+    ):
+        print(chunk, end='', flush=True)
+
+asyncio.run(run_streaming_local_search())
+```
+</CodeGroup>
+
+### DRIFT search
+
+DRIFT combines local and global approaches:
+
+```python
+from graphrag.api import drift_search
+
+async def run_drift_search():
+    response, context = await drift_search(
+        config=config,
+        entities=entities,
+        communities=communities,
+        community_reports=community_reports,
+        text_units=text_units,
+        relationships=relationships,
+        community_level=2,
+        response_type="Multiple Paragraphs",
+        query="How do the main themes relate to specific individuals?"
+    )
+    
+    print("Response:", response)
+
+asyncio.run(run_drift_search())
+```
+
+### Basic search
+
+Basic text similarity search without the knowledge graph:
+
+```python
+from graphrag.api import basic_search
+
+async def run_basic_search():
+    response, context = await basic_search(
+        config=config,
+        text_units=text_units,
+        response_type="Multiple Paragraphs",
+        query="Find mentions of artificial intelligence"
+    )
+    
+    print("Response:", response)
+
+asyncio.run(run_basic_search())
+```
+
+### Search API parameters
+
+#### Global search parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `config` | `GraphRagConfig` | GraphRAG configuration |
+| `entities` | `pd.DataFrame` | Entities dataframe |
+| `communities` | `pd.DataFrame` | Communities dataframe |
+| `community_reports` | `pd.DataFrame` | Community reports dataframe |
+| `community_level` | `int \| None` | Leiden hierarchy level (higher = smaller communities) |
+| `dynamic_community_selection` | `bool` | Enable dynamic community selection |
+| `response_type` | `str` | Response format description |
+| `query` | `str` | The query string |
+| `callbacks` | `list[QueryCallbacks]` | Optional callbacks |
+| `verbose` | `bool` | Enable verbose logging |
+
+#### Local search parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `config` | `GraphRagConfig` | GraphRAG configuration |
+| `entities` | `pd.DataFrame` | Entities dataframe |
+| `communities` | `pd.DataFrame` | Communities dataframe |
+| `community_reports` | `pd.DataFrame` | Community reports dataframe |
+| `text_units` | `pd.DataFrame` | Text units dataframe |
+| `relationships` | `pd.DataFrame` | Relationships dataframe |
+| `covariates` | `pd.DataFrame \| None` | Covariates/claims dataframe |
+| `community_level` | `int` | Leiden hierarchy level |
+| `response_type` | `str` | Response format description |
+| `query` | `str` | The query string |
+| `callbacks` | `list[QueryCallbacks]` | Optional callbacks |
+| `verbose` | `bool` | Enable verbose logging |
+
+## Prompt tuning API
+
+Generate custom prompts tailored to your data domain:
+
+```python
+import asyncio
+from pathlib import Path
+from graphrag.api import generate_indexing_prompts, DocSelectionType
+
+async def tune_prompts():
+    root = Path("./my-project")
+    
+    await generate_indexing_prompts(
+        root=root,
+        domain="medical research",
+        selection_method=DocSelectionType.RANDOM,
+        limit=15,
+        max_tokens=2000,
+        chunk_size=200,
+        overlap=100,
+        language="English",
+        discover_entity_types=True,
+        output=root / "prompts"
+    )
+    
+    print("Prompts generated successfully!")
+
+asyncio.run(tune_prompts())
+```
+
+### Selection methods
+
+<Tabs>
+  <Tab title="Random">
+    Randomly select documents:
+    ```python
+    await generate_indexing_prompts(
+        root=root,
+        selection_method=DocSelectionType.RANDOM,
+        limit=15
+    )
+    ```
+  </Tab>
+  
+  <Tab title="Top">
+    Select first N documents:
+    ```python
+    await generate_indexing_prompts(
+        root=root,
+        selection_method=DocSelectionType.TOP,
+        limit=15
+    )
+    ```
+  </Tab>
+  
+  <Tab title="Auto (K-means)">
+    Use clustering to select representative documents:
+    ```python
+    await generate_indexing_prompts(
+        root=root,
+        selection_method=DocSelectionType.AUTO,
+        n_subset_max=300,
+        k=15
+    )
+    ```
+  </Tab>
+</Tabs>
+
+## Query callbacks
+
+Implement custom callbacks to track query execution:
+
+```python
+from graphrag.callbacks.query_callbacks import QueryCallbacks
+from typing import Any
+
+class MyQueryCallbacks(QueryCallbacks):
+    def on_context(self, context: Any) -> None:
+        """Called when context is available."""
+        print(f"Context retrieved: {len(context)} items")
+    
+    def on_llm_start(self, prompt: str) -> None:
+        """Called before LLM invocation."""
+        print(f"Sending prompt ({len(prompt)} chars) to LLM")
+    
+    def on_llm_end(self, response: str) -> None:
+        """Called after LLM response."""
+        print(f"Received response ({len(response)} chars)")
+
+# Use with queries
+response, context = await local_search(
+    config=config,
+    entities=entities,
+    communities=communities,
+    community_reports=community_reports,
+    text_units=text_units,
+    relationships=relationships,
+    covariates=covariates,
+    community_level=2,
+    response_type="Multiple Paragraphs",
+    query="What are the findings?",
+    callbacks=[MyQueryCallbacks()]
+)
+```
+
+## Complete example
+
+Here's a complete example combining indexing and querying:
+
+```python
+import asyncio
+import pandas as pd
+from pathlib import Path
+from graphrag.api import build_index, global_search
+from graphrag.config.models.graph_rag_config import GraphRagConfig
+
+async def main():
+    # Setup
+    project_root = Path("./my-research")
+    config = GraphRagConfig.from_file(project_root / "settings.yaml")
+    output_dir = project_root / "output"
+    
+    # Step 1: Build the index
+    print("Building index...")
+    results = await build_index(
+        config=config,
+        verbose=True
+    )
+    
+    # Check for errors
+    for result in results:
+        if result.error:
+            print(f"Error in {result.workflow}: {result.error}")
+            return
+    
+    print("Index built successfully!")
+    
+    # Step 2: Load the indexed data
+    print("Loading index data...")
+    entities = pd.read_parquet(output_dir / "entities.parquet")
+    communities = pd.read_parquet(output_dir / "communities.parquet")
+    community_reports = pd.read_parquet(output_dir / "community_reports.parquet")
+    
+    # Step 3: Run a query
+    print("Running query...")
+    response, context = await global_search(
+        config=config,
+        entities=entities,
+        communities=communities,
+        community_reports=community_reports,
+        community_level=2,
+        dynamic_community_selection=False,
+        response_type="Multiple Paragraphs",
+        query="What are the main findings in this dataset?"
+    )
+    
+    print("\n=== Query Response ===")
+    print(response)
+    print("\n=== Context Data ===")
+    print(f"Retrieved {len(context)} context items")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Error handling
+
+Always handle potential errors in your pipeline:
+
+```python
+import asyncio
+from graphrag.api import build_index
+from graphrag.config.models.graph_rag_config import GraphRagConfig
+
+async def safe_index():
+    try:
+        config = GraphRagConfig.from_file("./settings.yaml")
+        results = await build_index(config=config, verbose=True)
+        
+        failed_workflows = [
+            result for result in results 
+            if result.error is not None
+        ]
+        
+        if failed_workflows:
+            print("Some workflows failed:")
+            for result in failed_workflows:
+                print(f"  - {result.workflow}: {result.error}")
+            return False
+        
+        print("All workflows completed successfully!")
+        return True
+        
+    except FileNotFoundError:
+        print("Configuration file not found")
+        return False
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        return False
+
+asyncio.run(safe_index())
+```
+
+<Tip>
+  Always validate your configuration with `--dry-run` via CLI before running programmatic indexing.
+</Tip>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="CLI usage" icon="terminal" href="/guides/cli-usage">
+    Learn the command-line interface
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration/overview">
+    Understand configuration options
+  </Card>
+  <Card title="Best practices" icon="lightbulb" href="/guides/best-practices">
+    Optimize your GraphRAG implementation
+  </Card>
+  <Card title="API reference" icon="book" href="/api/overview">
+    Detailed API documentation
+  </Card>
+</CardGroup>

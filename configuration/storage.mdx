@@ -1,0 +1,467 @@
+---
+title: Storage
+description: Configure storage backends for input, output, and caching
+---
+
+GraphRAG supports multiple storage backends for different parts of the pipeline. You can use local files, Azure Blob Storage, or Azure Cosmos DB depending on your requirements.
+
+## Storage types
+
+GraphRAG uses storage in four main areas:
+
+<CardGroup cols={2}>
+  <Card title="Input storage" icon="folder-open">
+    Where source documents are read from
+  </Card>
+  <Card title="Output storage" icon="folder-arrow-down">
+    Where processed artifacts are written
+  </Card>
+  <Card title="Cache storage" icon="clock-rotate-left">
+    Where LLM responses are cached
+  </Card>
+  <Card title="Vector storage" icon="database">
+    Where embeddings are stored for search
+  </Card>
+</CardGroup>
+
+## Input storage
+
+Configure where GraphRAG reads source documents:
+
+### File storage (default)
+
+```yaml
+input_storage:
+  type: file
+  base_dir: "input"
+```
+
+Place your documents in the `input/` directory:
+
+```
+project/
+├── input/
+│   ├── document1.txt
+│   ├── document2.txt
+│   └── data.csv
+├── settings.yaml
+└── .env
+```
+
+### Azure Blob Storage
+
+```yaml
+input_storage:
+  type: blob
+  connection_string: ${AZURE_STORAGE_CONNECTION_STRING}
+  container_name: graphrag-input
+  account_url: https://myaccount.blob.core.windows.net/
+```
+
+### Azure Cosmos DB
+
+```yaml
+input_storage:
+  type: cosmosdb
+  connection_string: ${COSMOS_CONNECTION_STRING}
+  container_name: graphrag-input
+  database_name: graphrag
+  account_url: https://myaccount.documents.azure.com:443/
+```
+
+## Output storage
+
+Configure where GraphRAG writes processed artifacts:
+
+### File storage (default)
+
+```yaml
+output_storage:
+  type: file
+  base_dir: "output"
+```
+
+Outputs are organized by artifact type:
+
+```
+project/
+└── output/
+    ├── create_base_text_units.parquet
+    ├── create_final_entities.parquet
+    ├── create_final_relationships.parquet
+    ├── create_final_communities.parquet
+    ├── create_final_community_reports.parquet
+    └── lancedb/  # Vector store
+```
+
+### Azure Blob Storage
+
+```yaml
+output_storage:
+  type: blob
+  connection_string: ${AZURE_STORAGE_CONNECTION_STRING}
+  container_name: graphrag-output
+  account_url: https://myaccount.blob.core.windows.net/
+```
+
+### Azure Cosmos DB
+
+```yaml
+output_storage:
+  type: cosmosdb
+  connection_string: ${COSMOS_CONNECTION_STRING}
+  container_name: graphrag-output
+  database_name: graphrag
+  account_url: https://myaccount.documents.azure.com:443/
+```
+
+## Update output storage
+
+For incremental indexing, specify a separate output location:
+
+```yaml
+update_output_storage:
+  type: file
+  base_dir: "update_output"
+```
+
+<Info>
+This preserves original outputs when re-indexing with updated data.
+</Info>
+
+## Cache storage
+
+Caching stores LLM responses to avoid redundant API calls:
+
+### JSON cache (default)
+
+```yaml
+cache:
+  type: json
+  storage:
+    type: file
+    base_dir: "cache"
+```
+
+The cache directory structure:
+
+```
+project/
+└── cache/
+    ├── extract_graph/
+    │   └── responses.json
+    ├── summarize_descriptions/
+    │   └── responses.json
+    └── community_reporting/
+        └── responses.json
+```
+
+### Memory cache
+
+For temporary caching (not persisted):
+
+```yaml
+cache:
+  type: memory
+```
+
+<Warning>
+Memory cache is lost when the process ends. Only use for testing.
+</Warning>
+
+### Disable caching
+
+```yaml
+cache:
+  type: none
+```
+
+### Azure Blob cache
+
+```yaml
+cache:
+  type: json
+  storage:
+    type: blob
+    connection_string: ${AZURE_STORAGE_CONNECTION_STRING}
+    container_name: graphrag-cache
+    account_url: https://myaccount.blob.core.windows.net/
+```
+
+### Azure Cosmos DB cache
+
+```yaml
+cache:
+  type: json
+  storage:
+    type: cosmosdb
+    connection_string: ${COSMOS_CONNECTION_STRING}
+    container_name: graphrag-cache
+    database_name: graphrag
+    account_url: https://myaccount.documents.azure.com:443/
+```
+
+## Vector storage
+
+Configure where embeddings are stored for similarity search:
+
+### LanceDB (default)
+
+```yaml
+vector_store:
+  type: lancedb
+  db_uri: output/lancedb
+```
+
+<Tip>
+LanceDB provides fast vector search with automatic indexing and works well for most use cases.
+</Tip>
+
+### Azure AI Search
+
+```yaml
+vector_store:
+  type: azure_ai_search
+  url: https://my-search-service.search.windows.net
+  api_key: ${AZURE_SEARCH_API_KEY}
+  audience: https://search.azure.com/.default  # for managed identity
+```
+
+### Azure Cosmos DB
+
+```yaml
+vector_store:
+  type: cosmosdb
+  url: https://myaccount.documents.azure.com:443/
+  connection_string: ${COSMOS_CONNECTION_STRING}
+  database_name: graphrag
+```
+
+### Custom index schema
+
+Customize field names and vector sizes:
+
+```yaml
+vector_store:
+  type: lancedb
+  db_uri: output/lancedb
+  index_schema:
+    text_unit_text:
+      index_name: "text-unit-embeddings"
+      id_field: "id_custom"
+      vector_field: "vector_custom"
+      vector_size: 3072
+    entity_description:
+      index_name: "entity-embeddings"
+      id_field: "id"
+      vector_field: "vector"
+      vector_size: 3072
+    community_full_content:
+      index_name: "community-embeddings"
+      vector_size: 3072
+```
+
+<ParamField path="index_name" type="string">
+  Name for the embedding index/table
+</ParamField>
+
+<ParamField path="id_field" type="string" default="id">
+  Field name for document IDs
+</ParamField>
+
+<ParamField path="vector_field" type="string" default="vector">
+  Field name for embedding vectors
+</ParamField>
+
+<ParamField path="vector_size" type="integer" default="3072">
+  Dimension of embedding vectors (must match model)
+</ParamField>
+
+## Reporting storage
+
+Configure where pipeline logs and reports are written:
+
+### File reporting (default)
+
+```yaml
+reporting:
+  type: file
+  base_dir: "logs"
+```
+
+### Azure Blob reporting
+
+```yaml
+reporting:
+  type: blob
+  connection_string: ${AZURE_STORAGE_CONNECTION_STRING}
+  container_name: graphrag-logs
+  storage_account_blob_url: https://myaccount.blob.core.windows.net/
+```
+
+## Storage parameters
+
+### Common parameters
+
+<ParamField path="type" type="string" required>
+  Storage backend: `file`, `blob`, `memory`, or `cosmosdb`
+</ParamField>
+
+<ParamField path="encoding" type="string" default="utf-8">
+  Character encoding for file operations
+</ParamField>
+
+<ParamField path="base_dir" type="string">
+  Base directory for file storage (relative to project root)
+</ParamField>
+
+### Azure Blob parameters
+
+<ParamField path="connection_string" type="string" required>
+  Azure Storage connection string (use environment variable)
+</ParamField>
+
+<ParamField path="container_name" type="string" required>
+  Name of the blob container
+</ParamField>
+
+<ParamField path="account_url" type="string">
+  Storage account blob URL
+</ParamField>
+
+### Azure Cosmos DB parameters
+
+<ParamField path="connection_string" type="string" required>
+  Cosmos DB connection string (use environment variable)
+</ParamField>
+
+<ParamField path="container_name" type="string" required>
+  Name of the Cosmos container
+</ParamField>
+
+<ParamField path="database_name" type="string" required>
+  Name of the Cosmos database
+</ParamField>
+
+<ParamField path="account_url" type="string">
+  Cosmos DB account URL
+</ParamField>
+
+## Example: Full Azure configuration
+
+Using Azure services for all storage:
+
+```yaml
+# Environment variables in .env
+# AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;...
+# COSMOS_CONNECTION_STRING=AccountEndpoint=https://...;AccountKey=...;
+# AZURE_SEARCH_API_KEY=your-search-api-key
+
+input_storage:
+  type: blob
+  connection_string: ${AZURE_STORAGE_CONNECTION_STRING}
+  container_name: graphrag-input
+  account_url: https://mystorage.blob.core.windows.net/
+
+output_storage:
+  type: blob
+  connection_string: ${AZURE_STORAGE_CONNECTION_STRING}
+  container_name: graphrag-output
+  account_url: https://mystorage.blob.core.windows.net/
+
+update_output_storage:
+  type: blob
+  connection_string: ${AZURE_STORAGE_CONNECTION_STRING}
+  container_name: graphrag-update-output
+  account_url: https://mystorage.blob.core.windows.net/
+
+cache:
+  type: json
+  storage:
+    type: blob
+    connection_string: ${AZURE_STORAGE_CONNECTION_STRING}
+    container_name: graphrag-cache
+    account_url: https://mystorage.blob.core.windows.net/
+
+vector_store:
+  type: azure_ai_search
+  url: https://my-search.search.windows.net
+  api_key: ${AZURE_SEARCH_API_KEY}
+
+reporting:
+  type: blob
+  connection_string: ${AZURE_STORAGE_CONNECTION_STRING}
+  container_name: graphrag-logs
+  storage_account_blob_url: https://mystorage.blob.core.windows.net/
+```
+
+## Example: Hybrid configuration
+
+Using local files for development with cloud caching:
+
+```yaml
+input_storage:
+  type: file
+  base_dir: "input"
+
+output_storage:
+  type: file
+  base_dir: "output"
+
+cache:
+  type: json
+  storage:
+    type: blob
+    connection_string: ${AZURE_STORAGE_CONNECTION_STRING}
+    container_name: graphrag-cache
+    account_url: https://mystorage.blob.core.windows.net/
+
+vector_store:
+  type: lancedb
+  db_uri: output/lancedb
+
+reporting:
+  type: file
+  base_dir: "logs"
+```
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Use environment variables for credentials">
+    Never commit connection strings or API keys to version control. Store them in `.env` files and reference with `${VAR_NAME}` syntax.
+  </Accordion>
+  
+  <Accordion title="Enable caching for development">
+    Use JSON file cache during development to avoid redundant API calls. Consider blob cache for team sharing.
+  </Accordion>
+  
+  <Accordion title="Separate production and test storage">
+    Use different containers/directories for production and testing to prevent data mixing.
+  </Accordion>
+  
+  <Accordion title="Monitor storage costs">
+    Azure Blob and Cosmos DB incur storage and transaction costs. Monitor usage and consider file storage for development.
+  </Accordion>
+  
+  <Accordion title="Back up cache and outputs">
+    Cache files can save significant API costs. Back them up before clearing or re-indexing.
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Caching" icon="clock-rotate-left" href="/configuration/caching">
+    Learn more about cache configuration and optimization
+  </Card>
+  <Card title="Settings reference" icon="book" href="/configuration/settings">
+    Complete configuration options
+  </Card>
+  <Card title="LLM models" icon="brain" href="/configuration/llm-models">
+    Configure language models
+  </Card>
+  <Card title="Start indexing" icon="play" href="/indexing/overview">
+    Begin processing documents
+  </Card>
+</CardGroup>

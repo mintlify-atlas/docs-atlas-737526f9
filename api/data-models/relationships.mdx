@@ -1,0 +1,120 @@
+---
+title: Relationships
+description: Relationship data model representing edges in the knowledge graph
+---
+
+## Overview
+
+The `Relationship` class represents an edge in the knowledge graph, connecting two entities. Relationships are extracted from documents and describe how entities are related to each other. Each relationship has a source entity, target entity, and optional weight indicating the strength of the connection.
+
+Relationships inherit from the `Identified` base class, which provides `id` and `short_id` fields.
+
+## Schema
+
+### Core fields
+
+<ResponseField name="id" type="string" required>
+  Unique identifier for the relationship.
+</ResponseField>
+
+<ResponseField name="short_id" type="string | null">
+  Human-readable ID used to refer to this relationship in prompts or texts displayed to users.
+</ResponseField>
+
+<ResponseField name="source" type="string" required>
+  The source entity name. This is the entity from which the relationship originates.
+</ResponseField>
+
+<ResponseField name="target" type="string" required>
+  The target entity name. This is the entity to which the relationship points.
+</ResponseField>
+
+<ResponseField name="weight" type="float" default={1.0}>
+  The edge weight indicating the strength or importance of the relationship. Higher values indicate stronger connections.
+</ResponseField>
+
+<ResponseField name="description" type="string | null">
+  A textual description of the relationship explaining the nature of the connection between source and target entities.
+</ResponseField>
+
+### Embeddings
+
+<ResponseField name="description_embedding" type="float[]">
+  The semantic embedding vector for the relationship description. Used for similarity search and semantic queries.
+</ResponseField>
+
+### Relationships
+
+<ResponseField name="text_unit_ids" type="string[]">
+  List of text unit IDs in which the relationship appears. Links the relationship back to its source text chunks.
+</ResponseField>
+
+### Metadata
+
+<ResponseField name="rank" type="integer" default={1}>
+  Rank of the relationship, used for sorting and prioritization. Higher rank indicates more important relationship. This can be based on centrality or other metrics.
+</ResponseField>
+
+<ResponseField name="attributes" type="object">
+  Additional attributes associated with the relationship. These attributes are included in search prompts and can contain custom metadata.
+</ResponseField>
+
+## Example
+
+```json
+{
+  "id": "r1234567-89ab-cdef-0123-456789abcdef",
+  "short_id": "0",
+  "source": "Microsoft Corporation",
+  "target": "Satya Nadella",
+  "weight": 0.95,
+  "description": "Satya Nadella is the CEO of Microsoft Corporation",
+  "description_embedding": [0.123, -0.456, 0.789, ...],
+  "text_unit_ids": ["t1", "t2"],
+  "rank": 5,
+  "attributes": {
+    "relationship_type": "leadership",
+    "start_date": "2014"
+  }
+}
+```
+
+## Creating from dictionary
+
+The `Relationship` class provides a `from_dict()` class method to create instances from dictionary data:
+
+```python
+relationship = Relationship.from_dict({
+    "id": "r1234567-89ab-cdef-0123-456789abcdef",
+    "source": "Microsoft Corporation",
+    "target": "Satya Nadella",
+    "weight": 0.95,
+    "description": "Satya Nadella is the CEO of Microsoft Corporation",
+    "rank": 5,
+    "text_unit_ids": ["t1", "t2"],
+    "attributes": {"relationship_type": "leadership"}
+})
+```
+
+<Expandable title="Custom key mapping">
+  The `from_dict()` method accepts custom key names for flexible data import:
+  
+  - `id_key`: Key for the relationship ID (default: "id")
+  - `short_id_key`: Key for the human-readable ID (default: "human_readable_id")
+  - `source_key`: Key for the source entity (default: "source")
+  - `target_key`: Key for the target entity (default: "target")
+  - `description_key`: Key for the description (default: "description")
+  - `rank_key`: Key for the rank value (default: "rank")
+  - `weight_key`: Key for the edge weight (default: "weight")
+  - `text_unit_ids_key`: Key for text unit IDs (default: "text_unit_ids")
+  - `attributes_key`: Key for additional attributes (default: "attributes")
+</Expandable>
+
+## Use cases
+
+Relationships are used throughout GraphRAG for:
+
+- **Graph traversal**: Following connections between entities during search
+- **Community detection**: Identifying clusters of related entities
+- **Importance ranking**: Using edge weights to prioritize relevant information
+- **Context retrieval**: Accessing source text through text_unit_ids

@@ -1,0 +1,496 @@
+---
+title: Query API
+description: Search your knowledge graph using the Python API
+---
+
+The query API provides multiple search methods to query your indexed knowledge graph. Each search method has both a standard and streaming variant.
+
+## Search methods
+
+GraphRAG provides four search methods:
+
+- **Global search** - Query the entire knowledge graph using hierarchical community summaries
+- **Local search** - Query specific entities and their local context
+- **DRIFT search** - Dynamic reasoning with iterative feedback and traversal
+- **Basic search** - Simple vector similarity search over text units
+
+## Global search
+
+Perform a global search across the entire knowledge graph.
+
+```python
+from graphrag.api import global_search
+import pandas as pd
+
+response, context = await global_search(
+    config=config,
+    entities=entities_df,
+    communities=communities_df,
+    community_reports=reports_df,
+    community_level=2,
+    dynamic_community_selection=False,
+    response_type="multiple paragraphs",
+    query="What are the main themes in the documents?"
+)
+```
+
+### Parameters
+
+<ParamField path="config" type="GraphRagConfig" required>
+  GraphRAG configuration object loaded from settings.yaml or constructed programmatically.
+</ParamField>
+
+<ParamField path="entities" type="pd.DataFrame" required>
+  DataFrame containing the final entities from `entities.parquet`.
+</ParamField>
+
+<ParamField path="communities" type="pd.DataFrame" required>
+  DataFrame containing the final communities from `communities.parquet`.
+</ParamField>
+
+<ParamField path="community_reports" type="pd.DataFrame" required>
+  DataFrame containing the final community reports from `community_reports.parquet`.
+</ParamField>
+
+<ParamField path="community_level" type="int | None" required>
+  The community level to search at. Higher levels provide broader context, lower levels provide more detail. Use `None` to search all levels.
+</ParamField>
+
+<ParamField path="dynamic_community_selection" type="bool" required>
+  Enable dynamic community selection instead of using all community reports at a fixed level. When `True`, the search engine intelligently selects relevant communities. You can still provide `community_level` to cap the maximum level.
+</ParamField>
+
+<ParamField path="response_type" type="str" required>
+  The type of response to generate. Common options:
+  - `"multiple paragraphs"` - Detailed multi-paragraph response
+  - `"single paragraph"` - Concise single paragraph
+  - `"single sentence"` - Brief single sentence
+  - `"list of 3-7 items"` - Bullet point list
+  - `"multi-page report"` - Comprehensive report
+</ParamField>
+
+<ParamField path="query" type="str" required>
+  The user query to search for.
+</ParamField>
+
+<ParamField path="callbacks" type="list[QueryCallbacks] | None" default="None">
+  List of callback objects to receive query events and context data.
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Enable verbose logging output.
+</ParamField>
+
+### Returns
+
+<ResponseField name="response" type="str | dict | list[dict]">
+  The generated response to the query. Format depends on the response_type.
+</ResponseField>
+
+<ResponseField name="context" type="str | list[pd.DataFrame] | dict[str, pd.DataFrame]">
+  The context data used to generate the response, including relevant community reports and entities.
+</ResponseField>
+
+## Global search streaming
+
+Stream the global search response as it's generated.
+
+```python
+from graphrag.api import global_search_streaming
+
+async for chunk in global_search_streaming(
+    config=config,
+    entities=entities_df,
+    communities=communities_df,
+    community_reports=reports_df,
+    community_level=2,
+    dynamic_community_selection=False,
+    response_type="multiple paragraphs",
+    query="What are the main themes?"
+):
+    print(chunk, end="", flush=True)
+```
+
+Parameters are identical to `global_search`. Returns an `AsyncGenerator` that yields response chunks as strings.
+
+## Local search
+
+Perform a local search focused on specific entities and their context.
+
+```python
+from graphrag.api import local_search
+
+response, context = await local_search(
+    config=config,
+    entities=entities_df,
+    communities=communities_df,
+    community_reports=reports_df,
+    text_units=text_units_df,
+    relationships=relationships_df,
+    covariates=covariates_df,
+    community_level=2,
+    response_type="multiple paragraphs",
+    query="What is the relationship between entity A and entity B?"
+)
+```
+
+### Parameters
+
+<ParamField path="config" type="GraphRagConfig" required>
+  GraphRAG configuration object.
+</ParamField>
+
+<ParamField path="entities" type="pd.DataFrame" required>
+  DataFrame containing the final entities from `entities.parquet`.
+</ParamField>
+
+<ParamField path="communities" type="pd.DataFrame" required>
+  DataFrame containing the final communities from `communities.parquet`.
+</ParamField>
+
+<ParamField path="community_reports" type="pd.DataFrame" required>
+  DataFrame containing the final community reports from `community_reports.parquet`.
+</ParamField>
+
+<ParamField path="text_units" type="pd.DataFrame" required>
+  DataFrame containing the final text units from `text_units.parquet`.
+</ParamField>
+
+<ParamField path="relationships" type="pd.DataFrame" required>
+  DataFrame containing the final relationships from `relationships.parquet`.
+</ParamField>
+
+<ParamField path="covariates" type="pd.DataFrame | None" required>
+  DataFrame containing the final covariates from `covariates.parquet`, or `None` if covariates are not used.
+</ParamField>
+
+<ParamField path="community_level" type="int" required>
+  The community level to search at.
+</ParamField>
+
+<ParamField path="response_type" type="str" required>
+  The type of response to generate.
+</ParamField>
+
+<ParamField path="query" type="str" required>
+  The user query to search for.
+</ParamField>
+
+<ParamField path="callbacks" type="list[QueryCallbacks] | None" default="None">
+  List of callback objects to receive query events.
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Enable verbose logging output.
+</ParamField>
+
+### Returns
+
+Returns a tuple of `(response, context)` similar to global search.
+
+## Local search streaming
+
+Stream the local search response as it's generated.
+
+```python
+from graphrag.api import local_search_streaming
+
+async for chunk in local_search_streaming(
+    config=config,
+    entities=entities_df,
+    communities=communities_df,
+    community_reports=reports_df,
+    text_units=text_units_df,
+    relationships=relationships_df,
+    covariates=covariates_df,
+    community_level=2,
+    response_type="multiple paragraphs",
+    query="What is the relationship between entity A and entity B?"
+):
+    print(chunk, end="", flush=True)
+```
+
+## DRIFT search
+
+Perform a DRIFT (Dynamic Reasoning with Iterative Feedback and Traversal) search.
+
+```python
+from graphrag.api import drift_search
+
+response, context = await drift_search(
+    config=config,
+    entities=entities_df,
+    communities=communities_df,
+    community_reports=reports_df,
+    text_units=text_units_df,
+    relationships=relationships_df,
+    community_level=2,
+    response_type="multiple paragraphs",
+    query="Explain the connections between these topics"
+)
+```
+
+### Parameters
+
+<ParamField path="config" type="GraphRagConfig" required>
+  GraphRAG configuration object.
+</ParamField>
+
+<ParamField path="entities" type="pd.DataFrame" required>
+  DataFrame containing the final entities from `entities.parquet`.
+</ParamField>
+
+<ParamField path="communities" type="pd.DataFrame" required>
+  DataFrame containing the final communities from `communities.parquet`.
+</ParamField>
+
+<ParamField path="community_reports" type="pd.DataFrame" required>
+  DataFrame containing the final community reports from `community_reports.parquet`.
+</ParamField>
+
+<ParamField path="text_units" type="pd.DataFrame" required>
+  DataFrame containing the final text units from `text_units.parquet`.
+</ParamField>
+
+<ParamField path="relationships" type="pd.DataFrame" required>
+  DataFrame containing the final relationships from `relationships.parquet`.
+</ParamField>
+
+<ParamField path="community_level" type="int" required>
+  The community level to search at.
+</ParamField>
+
+<ParamField path="response_type" type="str" required>
+  The type of response to generate.
+</ParamField>
+
+<ParamField path="query" type="str" required>
+  The user query to search for.
+</ParamField>
+
+<ParamField path="callbacks" type="list[QueryCallbacks] | None" default="None">
+  List of callback objects to receive query events.
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Enable verbose logging output.
+</ParamField>
+
+### Returns
+
+Returns a tuple of `(response, context)` similar to other search methods.
+
+## DRIFT search streaming
+
+Stream the DRIFT search response as it's generated.
+
+```python
+from graphrag.api import drift_search_streaming
+
+async for chunk in drift_search_streaming(
+    config=config,
+    entities=entities_df,
+    communities=communities_df,
+    community_reports=reports_df,
+    text_units=text_units_df,
+    relationships=relationships_df,
+    community_level=2,
+    response_type="multiple paragraphs",
+    query="Explain the connections between these topics"
+):
+    print(chunk, end="", flush=True)
+```
+
+## Basic search
+
+Perform a basic vector similarity search over text units.
+
+```python
+from graphrag.api import basic_search
+
+response, context = await basic_search(
+    config=config,
+    text_units=text_units_df,
+    response_type="multiple paragraphs",
+    query="Find information about topic X"
+)
+```
+
+### Parameters
+
+<ParamField path="config" type="GraphRagConfig" required>
+  GraphRAG configuration object.
+</ParamField>
+
+<ParamField path="text_units" type="pd.DataFrame" required>
+  DataFrame containing the final text units from `text_units.parquet`.
+</ParamField>
+
+<ParamField path="response_type" type="str" required>
+  The type of response to generate.
+</ParamField>
+
+<ParamField path="query" type="str" required>
+  The user query to search for.
+</ParamField>
+
+<ParamField path="callbacks" type="list[QueryCallbacks] | None" default="None">
+  List of callback objects to receive query events.
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="False">
+  Enable verbose logging output.
+</ParamField>
+
+### Returns
+
+Returns a tuple of `(response, context)` similar to other search methods.
+
+## Basic search streaming
+
+Stream the basic search response as it's generated.
+
+```python
+from graphrag.api import basic_search_streaming
+
+async for chunk in basic_search_streaming(
+    config=config,
+    text_units=text_units_df,
+    response_type="multiple paragraphs",
+    query="Find information about topic X"
+):
+    print(chunk, end="", flush=True)
+```
+
+## Complete example
+
+Here's a complete example showing how to load data and perform different types of searches:
+
+```python
+import asyncio
+import pandas as pd
+from graphrag.config.models.graph_rag_config import GraphRagConfig
+from graphrag.api import (
+    global_search,
+    local_search,
+    drift_search,
+    basic_search
+)
+
+async def main():
+    # Load configuration
+    config = GraphRagConfig.from_file("settings.yaml")
+    
+    # Load indexed data
+    entities = pd.read_parquet("output/entities.parquet")
+    communities = pd.read_parquet("output/communities.parquet")
+    reports = pd.read_parquet("output/community_reports.parquet")
+    text_units = pd.read_parquet("output/text_units.parquet")
+    relationships = pd.read_parquet("output/relationships.parquet")
+    
+    # Optional: load covariates if available
+    try:
+        covariates = pd.read_parquet("output/covariates.parquet")
+    except FileNotFoundError:
+        covariates = None
+    
+    # Global search - broad questions
+    print("Global search:")
+    response, context = await global_search(
+        config=config,
+        entities=entities,
+        communities=communities,
+        community_reports=reports,
+        community_level=2,
+        dynamic_community_selection=False,
+        response_type="multiple paragraphs",
+        query="What are the main themes in the documents?"
+    )
+    print(response)
+    print()
+    
+    # Local search - specific questions
+    print("Local search:")
+    response, context = await local_search(
+        config=config,
+        entities=entities,
+        communities=communities,
+        community_reports=reports,
+        text_units=text_units,
+        relationships=relationships,
+        covariates=covariates,
+        community_level=2,
+        response_type="multiple paragraphs",
+        query="What is the relationship between entity A and entity B?"
+    )
+    print(response)
+    print()
+    
+    # DRIFT search - complex reasoning
+    print("DRIFT search:")
+    response, context = await drift_search(
+        config=config,
+        entities=entities,
+        communities=communities,
+        community_reports=reports,
+        text_units=text_units,
+        relationships=relationships,
+        community_level=2,
+        response_type="multiple paragraphs",
+        query="Explain the connections between these topics"
+    )
+    print(response)
+    print()
+    
+    # Basic search - simple vector similarity
+    print("Basic search:")
+    response, context = await basic_search(
+        config=config,
+        text_units=text_units,
+        response_type="single paragraph",
+        query="Find information about topic X"
+    )
+    print(response)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Streaming example
+
+```python
+import asyncio
+import pandas as pd
+from graphrag.config.models.graph_rag_config import GraphRagConfig
+from graphrag.api import global_search_streaming
+
+async def main():
+    config = GraphRagConfig.from_file("settings.yaml")
+    
+    entities = pd.read_parquet("output/entities.parquet")
+    communities = pd.read_parquet("output/communities.parquet")
+    reports = pd.read_parquet("output/community_reports.parquet")
+    
+    print("Streaming response:")
+    async for chunk in global_search_streaming(
+        config=config,
+        entities=entities,
+        communities=communities,
+        community_reports=reports,
+        community_level=2,
+        dynamic_community_selection=False,
+        response_type="multiple paragraphs",
+        query="What are the main themes?"
+    ):
+        print(chunk, end="", flush=True)
+    print()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Related
+
+- [Index API](/api/index) - Build knowledge graph indexes
+- [Prompt tune API](/api/prompt-tune) - Generate custom prompts
+- [Configuration](/configuration/overview) - Configure search settings

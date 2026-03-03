@@ -1,0 +1,100 @@
+---
+title: Indexing overview
+description: Learn about the GraphRAG indexing pipeline and how it transforms unstructured text into a structured knowledge graph
+---
+
+The GraphRAG indexing package is a data pipeline and transformation suite that extracts meaningful, structured data from unstructured text using LLMs.
+
+## What is indexing?
+
+Indexing pipelines are configurable workflows composed of standard and custom steps, prompt templates, and input/output adapters. The standard pipeline is designed to:
+
+- Extract entities, relationships and claims from raw text
+- Perform community detection on entities
+- Generate community summaries and reports at multiple levels of granularity
+- Embed text into a vector space
+
+The outputs of the pipeline are stored as Parquet tables by default, and embeddings are written to your configured vector store.
+
+## Getting started
+
+<Steps>
+  <Step title="Install requirements">
+    See the [requirements](/installation) section for details on setting up a development environment.
+  </Step>
+  
+  <Step title="Configure GraphRAG">
+    To configure GraphRAG, see the [configuration](/configuration/overview) documentation.
+  </Step>
+  
+  <Step title="Run the indexing pipeline">
+    After you have a config file, you can run the pipeline using the CLI or Python API.
+  </Step>
+</Steps>
+
+## Usage
+
+<CodeGroup>
+```bash CLI
+uv run poe index --root <data_root>
+```
+
+```python Python API
+from graphrag.api.index import build_index
+from graphrag.config.models.graph_rag_config import GraphRagConfig
+
+# Load your configuration
+config = GraphRagConfig.from_yaml("settings.yaml")
+
+# Run the indexing pipeline
+results = await build_index(
+    config=config,
+    method="standard",  # or "fast"
+    verbose=True
+)
+```
+</CodeGroup>
+
+<Note>
+The Python API is available in `graphrag/api/index.py` and provides the recommended method to call the indexer directly from Python code.
+</Note>
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="LLM caching" icon="database">
+    Built-in cache layer around LLM interactions for resilience and efficiency
+  </Card>
+  
+  <Card title="Flexible workflows" icon="diagram-project">
+    Customizable pipeline with standard and custom workflow steps
+  </Card>
+  
+  <Card title="Parquet outputs" icon="table">
+    Structured data outputs in Parquet format for efficient storage and querying
+  </Card>
+  
+  <Card title="Vector embeddings" icon="vector-square">
+    Automatic text embedding to configured vector stores
+  </Card>
+</CardGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="sitemap" href="/indexing/architecture">
+    Understand the underlying concepts and execution model
+  </Card>
+  
+  <Card title="Data flow" icon="arrow-right-arrow-left" href="/indexing/dataflow">
+    Learn how data flows through the indexing pipeline
+  </Card>
+  
+  <Card title="Methods" icon="flask" href="/indexing/methods">
+    Compare Standard and FastGraphRAG indexing methods
+  </Card>
+  
+  <Card title="Configuration" icon="gear" href="/configuration/overview">
+    Configure the indexing engine for your use case
+  </Card>
+</CardGroup>

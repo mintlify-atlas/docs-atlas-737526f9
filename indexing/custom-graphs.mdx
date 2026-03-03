@@ -1,0 +1,423 @@
+---
+title: Bring your own graph
+description: Learn how to use your existing graph data with GraphRAG for community detection and query
+---
+
+Several users have asked if they can bring their own existing graph and have it summarized for query with GraphRAG. This page describes a simple method that aligns with the existing GraphRAG workflows.
+
+## Overview
+
+To cover the basic use cases for GraphRAG query, you should have two or three tables derived from your data:
+
+<Steps>
+  <Step title="Entities table">
+    The list of entities (nodes) in your graph
+  </Step>
+  
+  <Step title="Relationships table">
+    The list of relationships (edges) in your graph
+  </Step>
+  
+  <Step title="Text units table (optional)">
+    Source text chunks the graph was extracted from. Required for some query methods
+  </Step>
+</Steps>
+
+The approach is to run a custom GraphRAG workflow pipeline that assumes text chunking, entity extraction, and relationship extraction have already occurred.
+
+## Required tables
+
+### Entities
+
+For graph summarization purposes, you need the following fields from the full [entities schema](/indexing/outputs#entities):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | str | Yes | Unique identifier for the entity |
+| `title` | str | Yes | Name of the entity |
+| `description` | str | Yes | Textual description of the entity |
+| `text_unit_ids` | str[] | Optional | List of source text chunks (if available) |
+
+<Accordion title="Example entities.parquet">
+```python
+import pandas as pd
+from uuid import uuid4
+
+# Create your entities DataFrame
+entities = pd.DataFrame([
+    {
+        "id": str(uuid4()),
+        "title": "Microsoft",
+        "description": "A multinational technology corporation",
+        "text_unit_ids": ["unit1", "unit2"]
+    },
+    {
+        "id": str(uuid4()),
+        "title": "Azure",
+        "description": "Cloud computing platform by Microsoft",
+        "text_unit_ids": ["unit1", "unit3"]
+    }
+])
+
+# Write to Parquet
+entities.to_parquet("output/entities.parquet")
+```
+</Accordion>
+
+### Relationships
+
+For graph summarization purposes, you need the following fields from the full [relationships schema](/indexing/outputs#relationships):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | str | Yes | Unique identifier for the relationship |
+| `source` | str | Yes | Name of the source entity |
+| `target` | str | Yes | Name of the target entity |
+| `description` | str | Yes | Description of the relationship |
+| `weight` | float | **Yes** | Edge weight (important for Leiden communities!) |
+| `text_unit_ids` | str[] | Optional | List of source text chunks (if available) |
+
+<Warning>
+The `weight` field is **critical** because it is used to properly compute Leiden communities. Make sure to provide meaningful weights (e.g., 0.0 to 1.0 based on relationship strength).
+</Warning>
+
+<Accordion title="Example relationships.parquet">
+```python
+import pandas as pd
+from uuid import uuid4
+
+# Create your relationships DataFrame
+relationships = pd.DataFrame([
+    {
+        "id": str(uuid4()),
+        "source": "Microsoft",
+        "target": "Azure",
+        "description": "Microsoft develops and operates Azure",
+        "weight": 0.95,
+        "text_unit_ids": ["unit1"]
+    },
+    {
+        "id": str(uuid4()),
+        "source": "Microsoft",
+        "target": "OpenAI",
+        "description": "Microsoft has invested in and partnered with OpenAI",
+        "weight": 0.85,
+        "text_unit_ids": ["unit2"]
+    }
+])
+
+# Write to Parquet
+relationships.to_parquet("output/relationships.parquet")
+```
+</Accordion>
+
+### Text units (optional)
+
+Text units are chunks of your documents sized to fit into the context window of your model. Some search methods use these.
+
+See the full [text_units schema](/indexing/outputs#text-units) for all fields.
+
+<Accordion title="Example text_units.parquet">
+```python
+import pandas as pd
+from uuid import uuid4
+
+# Create your text units DataFrame
+text_units = pd.DataFrame([
+    {
+        "id": "unit1",
+        "text": "Microsoft Corporation develops Azure cloud platform...",
+        "n_tokens": 1200,
+        "document_id": "doc1",
+        "entity_ids": ["ent1", "ent2"],
+        "relationship_ids": ["rel1"]
+    }
+])
+
+# Write to Parquet
+text_units.to_parquet("output/text_units.parquet")
+```
+</Accordion>
+
+## Workflow configuration
+
+GraphRAG allows you to specify only the specific workflow steps you need. For basic graph summarization and query, configure the following in your `settings.yaml`:
+
+<Tabs>
+  <Tab title="Global search only">
+    For [Global Search](/query/global-search) (community-based summarization):
+    
+    ```yaml settings.yaml
+    workflows:
+      - create_communities
+      - create_community_reports
+    ```
+    
+    This will:
+    1. Run Leiden community detection on your graph
+    2. Generate LLM-based community reports
+    
+    <Info>
+    This is the minimal configuration for GraphRAG Global Search.
+    </Info>
+  </Tab>
+  
+  <Tab title="All search types">
+    For [Local](/query/local-search), [DRIFT](/query/drift-search), and [Basic](/query/overview#basic-search) search:
+    
+    ```yaml settings.yaml
+    workflows:
+      - create_communities
+      - create_community_reports
+      - generate_text_embeddings
+    ```
+    
+    This adds text embedding generation for:
+    - Entity descriptions
+    - Text unit content
+    - Community report content
+    
+    <Warning>
+    This requires that you have `text_units` available.
+    </Warning>
+  </Tab>
+  
+  <Tab title="FastGraphRAG variant">
+    If your graph doesn't have entity/relationship descriptions, use text-based community reports:
+    
+    ```yaml settings.yaml
+    workflows:
+      - create_communities
+      - create_community_reports_text
+      - generate_text_embeddings
+    ```
+    
+    This uses [FastGraphRAG](/indexing/methods#fastgraphrag) text-based reports instead of description-based reports.
+    
+    <Warning>
+    This requires that your entities and relationships tables have valid links to `text_unit_ids`.
+    </Warning>
+  </Tab>
+</Tabs>
+
+## Setup steps
+
+Here's how to put it all together:
+
+<Steps>
+  <Step title="Prepare your data">
+    Create Parquet files for entities and relationships (and optionally text_units) following the schemas above.
+    
+    ```python
+    import pandas as pd
+    from pathlib import Path
+    
+    # Create output directory
+    output_dir = Path("output")
+    output_dir.mkdir(exist_ok=True)
+    
+    # Save your DataFrames
+    entities_df.to_parquet(output_dir / "entities.parquet")
+    relationships_df.to_parquet(output_dir / "relationships.parquet")
+    # text_units_df.to_parquet(output_dir / "text_units.parquet")  # if available
+    ```
+  </Step>
+  
+  <Step title="Configure workflows">
+    Update your `settings.yaml` to only run the workflows you need:
+    
+    ```yaml settings.yaml
+    workflows:
+      - create_communities
+      - create_community_reports
+      # - generate_text_embeddings  # if needed for local/drift search
+    
+    storage:
+      type: file
+      base_dir: "output"  # Where your parquet files are
+    ```
+  </Step>
+  
+  <Step title="Run indexing">
+    Run the GraphRAG indexer:
+    
+    ```bash
+    graphrag index --root <your_project_root>
+    ```
+    
+    This will:
+    - Skip document loading and graph extraction (already done)
+    - Perform community detection on your existing graph
+    - Generate community reports
+    - (Optionally) generate embeddings
+  </Step>
+  
+  <Step title="Query your graph">
+    Once indexing completes, you can query using GraphRAG:
+    
+    ```bash
+    graphrag query --root <your_project_root> --method global "What are the main themes in this dataset?"
+    ```
+  </Step>
+</Steps>
+
+## Complete example
+
+Here's a complete end-to-end example:
+
+```python convert_graph.py
+import pandas as pd
+import networkx as nx
+from pathlib import Path
+from uuid import uuid4
+
+def convert_networkx_to_graphrag(G: nx.Graph, output_dir: str = "output"):
+    """Convert a NetworkX graph to GraphRAG format."""
+    output_path = Path(output_dir)
+    output_path.mkdir(exist_ok=True)
+    
+    # Extract entities from nodes
+    entities = []
+    for node in G.nodes():
+        entities.append({
+            "id": str(uuid4()),
+            "title": str(node),
+            "description": G.nodes[node].get("description", f"Entity: {node}"),
+            "text_unit_ids": [],  # Empty if no text units available
+        })
+    
+    entities_df = pd.DataFrame(entities)
+    entities_df.to_parquet(output_path / "entities.parquet")
+    print(f"Wrote {len(entities_df)} entities")
+    
+    # Extract relationships from edges
+    relationships = []
+    for source, target in G.edges():
+        edge_data = G[source][target]
+        relationships.append({
+            "id": str(uuid4()),
+            "source": str(source),
+            "target": str(target),
+            "description": edge_data.get("description", f"Relationship between {source} and {target}"),
+            "weight": edge_data.get("weight", 1.0),
+            "text_unit_ids": [],
+        })
+    
+    relationships_df = pd.DataFrame(relationships)
+    relationships_df.to_parquet(output_path / "relationships.parquet")
+    print(f"Wrote {len(relationships_df)} relationships")
+    
+    print(f"\nGraph data written to {output_path}/")
+    print("Next steps:")
+    print("1. Update settings.yaml with workflows: [create_communities, create_community_reports]")
+    print("2. Run: graphrag index --root .")
+
+# Example usage
+if __name__ == "__main__":
+    # Create a sample graph
+    G = nx.karate_club_graph()
+    
+    # Add descriptions to nodes
+    for node in G.nodes():
+        G.nodes[node]["description"] = f"Person {node} in the karate club"
+    
+    # Add weights to edges
+    for source, target in G.edges():
+        G[source][target]["weight"] = 0.8
+        G[source][target]["description"] = f"Person {source} knows person {target}"
+    
+    # Convert to GraphRAG format
+    convert_networkx_to_graphrag(G)
+```
+
+## Configuration file
+
+Here's a complete `settings.yaml` for bring-your-own-graph scenarios:
+
+```yaml settings.yaml
+# Minimal configuration for existing graphs
+
+# Only run community detection and reporting
+workflows:
+  - create_communities
+  - create_community_reports
+  # Uncomment if you need local/drift search:
+  # - generate_text_embeddings
+
+# Storage configuration
+storage:
+  type: file
+  base_dir: "output"
+
+# Community detection settings
+cluster_graph:
+  max_cluster_size: 10  # Adjust based on your graph size
+  use_lcc: true  # Use largest connected component
+  seed: 42  # For reproducible results
+
+# LLM settings for community reports
+llm:
+  api_key: ${OPENAI_API_KEY}
+  model: gpt-4-turbo-preview
+  max_tokens: 4000
+
+# Embedding settings (if using generate_text_embeddings)
+embeddings:
+  llm:
+    api_key: ${OPENAI_API_KEY}
+    model: text-embedding-3-small
+```
+
+## Limitations and considerations
+
+<AccordionGroup>
+  <Accordion title="Missing descriptions" icon="circle-exclamation">
+    If your graph doesn't have entity or relationship descriptions:
+    - Use `create_community_reports_text` instead of `create_community_reports`
+    - Ensure you have text_units with valid entity/relationship links
+    - Consider adding synthetic descriptions based on entity names/types
+  </Accordion>
+  
+  <Accordion title="Edge weights" icon="scale-balanced">
+    Edge weights are critical for Leiden community detection:
+    - Provide meaningful weights (0.0 to 1.0 recommended)
+    - Higher weight = stronger connection
+    - If unknown, use 1.0 for all edges
+  </Accordion>
+  
+  <Accordion title="Text units" icon="file-lines">
+    Text units are optional for Global Search but required for:
+    - Local Search
+    - DRIFT Search
+    - Text-based community reports
+    
+    If you don't have original source text, you can skip these query methods.
+  </Accordion>
+  
+  <Accordion title="Graph size" icon="chart-network">
+    For large graphs:
+    - Adjust `max_cluster_size` in `cluster_graph` settings
+    - Consider using `use_lcc: true` to focus on the main component
+    - Community detection may take significant time
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Outputs" icon="table" href="/indexing/outputs">
+    Understand the output table schemas
+  </Card>
+  
+  <Card title="Querying" icon="magnifying-glass" href="/query/overview">
+    Learn how to query your graph
+  </Card>
+  
+  <Card title="Global search" icon="globe" href="/query/global-search">
+    Use community-based search on your graph
+  </Card>
+  
+  <Card title="Configuration" icon="gear" href="/configuration/overview">
+    Configure community detection parameters
+  </Card>
+</CardGroup>

@@ -1,0 +1,499 @@
+---
+title: Installation
+description: Complete installation guide for GraphRAG across all platforms and environments
+---
+
+This guide covers everything you need to install and set up GraphRAG on your system.
+
+## System requirements
+
+<CardGroup cols={2}>
+  <Card title="Python version" icon="python">
+    Python 3.11, 3.12, or 3.13
+    
+    Check your version: `python --version`
+  </Card>
+  
+  <Card title="LLM provider" icon="brain">
+    OpenAI API key, Azure OpenAI endpoint, or any LiteLLM-supported provider
+  </Card>
+</CardGroup>
+
+<Note>
+  GraphRAG uses [LiteLLM](https://docs.litellm.ai/) under the hood, which supports 100+ LLM providers including OpenAI, Azure, Anthropic, Cohere, and more.
+</Note>
+
+## Installation methods
+
+### Install from PyPI (recommended)
+
+The easiest way to install GraphRAG is via pip from the Python Package Index:
+
+```bash
+pip install graphrag
+```
+
+This installs the latest stable release (currently version 3.0.5) along with all required dependencies.
+
+<Tip>
+  We recommend using a virtual environment to avoid conflicts with other Python packages.
+</Tip>
+
+### Install in a virtual environment
+
+Using a virtual environment is the best practice for Python projects:
+
+<CodeGroup>
+```bash Unix/MacOS
+# Create project directory
+mkdir my-graphrag-project
+cd my-graphrag-project
+
+# Create virtual environment
+python -m venv .venv
+
+# Activate virtual environment
+source .venv/bin/activate
+
+# Install GraphRAG
+pip install graphrag
+```
+
+```bash Windows (PowerShell)
+# Create project directory
+mkdir my-graphrag-project
+cd my-graphrag-project
+
+# Create virtual environment
+python -m venv .venv
+
+# Activate virtual environment
+.venv\Scripts\activate
+
+# Install GraphRAG
+pip install graphrag
+```
+
+```bash Windows (Command Prompt)
+# Create project directory
+mkdir my-graphrag-project
+cd my-graphrag-project
+
+# Create virtual environment
+python -m venv .venv
+
+# Activate virtual environment
+.venv\Scripts\activate.bat
+
+# Install GraphRAG
+pip install graphrag
+```
+</CodeGroup>
+
+### Install from source
+
+For development or to use the latest features from the main branch:
+
+```bash
+# Clone the repository
+git clone https://github.com/microsoft/graphrag.git
+cd graphrag
+
+# Create and activate virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install in development mode
+pip install -e .
+```
+
+<Warning>
+  Installing from source gives you the latest code but may include unstable features. Use the PyPI release for production workloads.
+</Warning>
+
+## Core dependencies
+
+GraphRAG automatically installs these core dependencies:
+
+<AccordionGroup>
+  <Accordion title="Language models and AI">
+    - `graphrag-llm` - LLM integration layer
+    - `azure-identity` - Azure authentication
+    - `json-repair` - JSON parsing and repair
+    - `nltk` - Natural language processing
+    - `spacy` - Advanced NLP capabilities
+    - `textblob` - Text processing
+  </Accordion>
+  
+  <Accordion title="Graph and vector operations">
+    - `graphrag-vectors` - Vector storage and search
+    - `graspologic-native` - Graph analytics
+    - `networkx` - Graph data structures
+    - `graphrag-chunking` - Text chunking algorithms
+  </Accordion>
+  
+  <Accordion title="Data and storage">
+    - `graphrag-storage` - Storage abstractions
+    - `graphrag-cache` - LLM caching layer
+    - `azure-storage-blob` - Azure Blob storage
+    - `azure-search-documents` - Azure AI Search
+    - `pandas` - Data manipulation
+    - `pyarrow` - Parquet file support
+    - `numpy` - Numerical computing
+  </Accordion>
+  
+  <Accordion title="CLI and utilities">
+    - `typer` - Command-line interface
+    - `pydantic` - Data validation
+    - `tqdm` - Progress bars
+    - `devtools` - Development utilities
+  </Accordion>
+</AccordionGroup>
+
+## Verify installation
+
+After installation, verify that GraphRAG is correctly installed:
+
+```bash
+# Check GraphRAG version
+graphrag --version
+
+# View available commands
+graphrag --help
+```
+
+You should see output showing version 3.0.5 (or later) and a list of available commands:
+
+- `init` - Initialize a new GraphRAG workspace
+- `index` - Run the indexing pipeline
+- `query` - Query your indexed data
+- `update` - Update an existing index
+- `prompt-tune` - Auto-tune prompts for your data
+
+## Provider-specific setup
+
+### OpenAI
+
+For OpenAI, you only need an API key:
+
+1. Get your API key from [platform.openai.com](https://platform.openai.com/api-keys)
+2. After running `graphrag init`, add it to your `.env` file:
+
+```bash .env
+GRAPHRAG_API_KEY=sk-your-openai-api-key-here
+```
+
+3. Your `settings.yaml` will use OpenAI by default:
+
+```yaml settings.yaml
+completion_models:
+  default_completion_model:
+    model_provider: openai
+    model: gpt-4-turbo
+    api_key: ${GRAPHRAG_API_KEY}
+
+embedding_models:
+  default_embedding_model:
+    model_provider: openai
+    model: text-embedding-3-large
+    api_key: ${GRAPHRAG_API_KEY}
+```
+
+### Azure OpenAI
+
+For Azure OpenAI, you need additional configuration:
+
+1. Get your credentials from the Azure Portal:
+   - API key
+   - Endpoint URL (e.g., `https://your-resource.openai.azure.com`)
+   - Deployment names for your models
+   - API version (e.g., `2024-02-15-preview`)
+
+2. Add your API key to `.env`:
+
+```bash .env
+GRAPHRAG_API_KEY=your-azure-openai-key
+```
+
+3. Update `settings.yaml` with Azure-specific settings:
+
+```yaml settings.yaml
+completion_models:
+  default_completion_model:
+    model_provider: azure
+    model: gpt-4-turbo
+    deployment_name: your-gpt4-deployment
+    api_base: https://your-resource.openai.azure.com
+    api_version: 2024-02-15-preview
+    api_key: ${GRAPHRAG_API_KEY}
+
+embedding_models:
+  default_embedding_model:
+    model_provider: azure
+    model: text-embedding-3-large
+    deployment_name: your-embedding-deployment
+    api_base: https://your-resource.openai.azure.com
+    api_version: 2024-02-15-preview
+    api_key: ${GRAPHRAG_API_KEY}
+```
+
+#### Azure managed identity
+
+For managed identity authentication (no API key needed):
+
+```yaml settings.yaml
+completion_models:
+  default_completion_model:
+    model_provider: azure
+    model: gpt-4-turbo
+    deployment_name: your-gpt4-deployment
+    api_base: https://your-resource.openai.azure.com
+    api_version: 2024-02-15-preview
+    auth_method: azure_managed_identity
+```
+
+Then authenticate using Azure CLI:
+
+```bash
+az login
+az account set --subscription your-subscription-id
+```
+
+### Other providers (via LiteLLM)
+
+GraphRAG supports any provider that LiteLLM supports. Examples:
+
+<CodeGroup>
+```yaml Anthropic
+completion_models:
+  default_completion_model:
+    model_provider: anthropic
+    model: claude-3-opus-20240229
+    api_key: ${ANTHROPIC_API_KEY}
+```
+
+```yaml Cohere
+completion_models:
+  default_completion_model:
+    model_provider: cohere
+    model: command-r-plus
+    api_key: ${COHERE_API_KEY}
+```
+
+```yaml Local/Ollama
+completion_models:
+  default_completion_model:
+    model_provider: ollama
+    model: llama2
+    api_base: http://localhost:11434
+```
+</CodeGroup>
+
+<Tip>
+  See the [LiteLLM provider documentation](https://docs.litellm.ai/docs/providers) for complete configuration examples for 100+ providers.
+</Tip>
+
+## Optional dependencies
+
+### Vector stores
+
+GraphRAG includes LanceDB by default. For other vector stores:
+
+```bash
+# Azure AI Search (included)
+pip install azure-search-documents
+
+# For custom vector stores, implement the vector store interface
+# See: https://microsoft.github.io/graphrag/examples_notebooks/custom_vector_store.ipynb
+```
+
+### Storage backends
+
+Additional storage options are available:
+
+```bash
+# Azure Blob Storage (included)
+pip install azure-storage-blob
+
+# CosmosDB support (included)
+pip install azure-cosmos
+```
+
+## Platform-specific considerations
+
+### Linux/Unix
+
+No special considerations. Standard pip installation works:
+
+```bash
+pip install graphrag
+```
+
+### macOS
+
+For Apple Silicon (M1/M2) Macs, all dependencies are compatible:
+
+```bash
+# Standard installation
+pip install graphrag
+```
+
+Some users may need to install build tools for native dependencies:
+
+```bash
+brew install cmake
+```
+
+### Windows
+
+Windows users may need Visual C++ build tools for some native dependencies:
+
+1. Download and install [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+2. Then install GraphRAG:
+
+```bash
+pip install graphrag
+```
+
+## Docker installation
+
+While there's no official Docker image, you can create your own:
+
+```dockerfile Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install GraphRAG
+RUN pip install graphrag
+
+# Copy your project files
+COPY . .
+
+CMD ["graphrag", "--help"]
+```
+
+Build and run:
+
+```bash
+docker build -t graphrag .
+docker run -v $(pwd):/app graphrag index
+```
+
+## Upgrading GraphRAG
+
+### Upgrade to latest version
+
+```bash
+pip install --upgrade graphrag
+```
+
+### Check for updates
+
+```bash
+pip list --outdated | grep graphrag
+```
+
+<Warning>
+  **Important**: Always run `graphrag init --root [path] --force` between minor version bumps to ensure you have the latest config format. This will overwrite your `settings.yaml` and prompts, so backup first if you've made customizations.
+</Warning>
+
+### Migration between major versions
+
+For major version updates (e.g., 2.x to 3.x):
+
+1. Read the [breaking changes document](https://github.com/microsoft/graphrag/blob/main/breaking-changes.md)
+2. Backup your existing configuration and data
+3. Use the provided migration notebooks if available to avoid re-indexing
+4. Update your settings.yaml to the new format
+5. Re-run initialization: `graphrag init --force`
+
+## Troubleshooting installation
+
+<AccordionGroup>
+  <Accordion title="pip install fails with build errors">
+    This usually indicates missing build tools:
+    
+    **macOS**:
+    ```bash
+    brew install cmake
+    xcode-select --install
+    ```
+    
+    **Linux (Debian/Ubuntu)**:
+    ```bash
+    sudo apt-get update
+    sudo apt-get install build-essential cmake
+    ```
+    
+    **Windows**:
+    Install [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+  </Accordion>
+  
+  <Accordion title="Command not found: graphrag">
+    The GraphRAG CLI may not be in your PATH:
+    
+    1. Ensure your virtual environment is activated
+    2. Try using the full path: `python -m graphrag --help`
+    3. On Windows, you may need to use `python -m graphrag` instead of `graphrag`
+  </Accordion>
+  
+  <Accordion title="Import errors after installation">
+    This can happen with dependency conflicts:
+    
+    1. Create a fresh virtual environment
+    2. Uninstall and reinstall GraphRAG:
+    ```bash
+    pip uninstall graphrag
+    pip install graphrag
+    ```
+    3. Check for conflicting packages: `pip check`
+  </Accordion>
+  
+  <Accordion title="SSL certificate errors">
+    If you encounter SSL errors during installation:
+    
+    ```bash
+    # Upgrade pip and certifi
+    pip install --upgrade pip certifi
+    
+    # Try installation again
+    pip install graphrag
+    ```
+    
+    For corporate networks behind proxies, configure pip:
+    ```bash
+    pip install --proxy http://proxy.company.com:port graphrag
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+Once GraphRAG is installed:
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Follow our quickstart guide to index your first document and run queries.
+  </Card>
+  
+  <Card title="Configuration" icon="gear" href="/configuration/initialization">
+    Learn about initialization and configuration options.
+  </Card>
+  
+  <Card title="CLI reference" icon="terminal" href="/cli/overview">
+    Explore all available command-line options.
+  </Card>
+  
+  <Card title="Development" icon="code" href="https://github.com/microsoft/graphrag/blob/main/DEVELOPING.md">
+    Set up a development environment to contribute to GraphRAG.
+  </Card>
+</CardGroup>
+
+## Getting help
+
+If you encounter issues during installation:
+
+- Check [GitHub Issues](https://github.com/microsoft/graphrag/issues) for known problems
+- Ask questions in [GitHub Discussions](https://github.com/microsoft/graphrag/discussions)
+- Review the [contributing guide](https://github.com/microsoft/graphrag/blob/main/CONTRIBUTING.md)

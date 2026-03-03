@@ -1,0 +1,578 @@
+---
+title: Migration guide
+description: Upgrade GraphRAG between versions without re-indexing your data
+---
+
+GraphRAG follows semantic versioning and provides migration paths for upgrading between versions. This guide helps you navigate breaking changes and upgrade your projects smoothly.
+
+## Versioning approach
+
+GraphRAG follows [semantic versioning](https://semver.org/) with some specific considerations:
+
+<CardGroup cols={3}>
+  <Card title="CLI" icon="terminal">
+    Conforms to standard semver
+  </Card>
+  <Card title="API" icon="code">
+    Conforms to standard semver
+  </Card>
+  <Card title="settings.yaml" icon="file">
+    Changes result in minor version bump
+  </Card>
+  <Card title="Data model" icon="database">
+    Conforms to standard semver
+  </Card>
+  <Card title="Internals" icon="gears">
+    May change without semver compliance
+  </Card>
+</CardGroup>
+
+<Warning>
+  Always run `graphrag init --root [path] --force` between minor version bumps to ensure you have the latest config format. Back up your customizations first.
+</Warning>
+
+## General upgrade process
+
+<Steps>
+  <Step title="Back up your project">
+    ```bash
+    cp -r ./my-project ./my-project-backup
+    ```
+    
+    Especially important:
+    - `settings.yaml`
+    - `prompts/` directory
+    - `.env` file
+  </Step>
+  
+  <Step title="Upgrade GraphRAG">
+    ```bash
+    pip install --upgrade graphrag
+    ```
+  </Step>
+  
+  <Step title="Check version">
+    ```bash
+    pip show graphrag
+    ```
+  </Step>
+  
+  <Step title="Update configuration">
+    For minor/major version bumps:
+    
+    ```bash
+    graphrag init --root ./my-project --force
+    ```
+    
+    Then restore your customizations from backup.
+  </Step>
+  
+  <Step title="Run migration (major versions only)">
+    For major version upgrades, run the migration notebook (see version-specific sections below).
+  </Step>
+</Steps>
+
+## Migration to v3
+
+GraphRAG v3 streamlined the core library by removing rarely-used features and simplifying configuration.
+
+### Overview
+
+**Migration notebook**: `docs/examples_notebooks/index_migration_to_v3.ipynb`
+
+**Main goals**:
+- Slim down maintenance overhead
+- Remove out-of-scope features
+- Simplify configuration model
+
+### Data model changes
+
+The primary breaking change affects the `text_units` table:
+
+**Before v3**:
+```python
+# text_units had document_ids (plural) - a list
+text_unit = {
+    "id": "unit1",
+    "text": "...",
+    "document_ids": ["doc1", "doc2"]  # List
+}
+```
+
+**After v3**:
+```python
+# text_units has document_id (singular)
+text_unit = {
+    "id": "unit1",
+    "text": "...",
+    "document_id": "doc1"  # Single value
+}
+```
+
+<Tip>
+  The migration notebook handles this transformation automatically - you don't need to re-index.
+</Tip>
+
+### API changes
+
+Removed multi-search variants:
+
+**Removed** (no longer available):
+```python
+# These are gone in v3
+from graphrag.api import multi_global_search  # ❌
+from graphrag.api import multi_local_search   # ❌
+```
+
+**Use instead**:
+```python
+# Single search methods remain
+from graphrag.api import global_search  # ✓
+from graphrag.api import local_search   # ✓
+```
+
+### Configuration changes
+
+<AccordionGroup>
+  <Accordion title="Model type changes">
+    **Before v3** (fnllm-based):
+    ```yaml
+    llm:
+      type: openai_chat  # ❌ No longer valid
+    
+    embedding:
+      type: azure_openai_embedding  # ❌ No longer valid
+    ```
+    
+    **After v3** (LiteLLM-based):
+    ```yaml
+    llm:
+      type: chat  # ✓ Generic type
+      model_provider: openai  # Specify provider
+    
+    embedding:
+      type: embedding  # ✓ Generic type
+      model_provider: azure  # Specify provider
+    ```
+  </Accordion>
+  
+  <Accordion title="Rate limiting">
+    **Before v3**:
+    ```yaml
+    llm:
+      rate_limiting: auto  # ❌ No longer supported
+    ```
+    
+    **After v3**:
+    ```yaml
+    llm:
+      requests_per_minute: 60  # ✓ Explicit limits
+      tokens_per_minute: 80000
+      # Or use null for no limiting
+      requests_per_minute: null
+    ```
+  </Accordion>
+  
+  <Accordion title="Vector store configuration">
+    **Before v3**:
+    ```yaml
+    # Nested dict for multi-search support
+    vector_store:
+      entity_description:
+        type: lancedb
+        db_uri: ./lancedb
+      community_full_content:
+        type: lancedb
+        db_uri: ./lancedb
+    
+    outputs:
+      # Multi-search output configuration
+      entity_description:
+        type: parquet
+    ```
+    
+    **After v3**:
+    ```yaml
+    # Simplified single root-level object
+    vector_store:
+      type: lancedb
+      db_uri: ./lancedb
+      
+      # Optional custom schema
+      index_schema:
+        entity_description:
+          index_name: entities
+        community_full_content:
+          index_name: communities
+    
+    # No outputs block needed
+    ```
+  </Accordion>
+  
+  <Accordion title="Removed features">
+    The following configuration blocks have been removed:
+    
+    ```yaml
+    # ❌ All removed in v3
+    
+    umap:  # Removed - use Gephi for visualization
+      enabled: false
+    
+    embed_graph:  # Removed - no longer generates x/y positions
+      enabled: false
+    
+    workflows:
+      entity_extraction:
+        strategy:  # Removed - unused complexity
+          type: nltk
+    
+    input:
+      file_filter:  # Removed - essentially unused
+        include: ["*.txt"]
+    
+    chunking:
+      group_by_columns:  # Removed - unused grouping feature
+        - document_type
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Migration steps
+
+<Steps>
+  <Step title="Run migration notebook">
+    Navigate to the migration notebook and execute all cells:
+    
+    ```bash
+    jupyter notebook docs/examples_notebooks/index_migration_to_v3.ipynb
+    ```
+    
+    This transforms your existing tables to the v3 format.
+  </Step>
+  
+  <Step title="Update configuration">
+    ```bash
+    graphrag init --root ./my-project --force
+    ```
+  </Step>
+  
+  <Step title="Restore customizations">
+    Manually copy over your custom settings:
+    
+    - API keys from `.env`
+    - Model names
+    - Custom prompts
+    - Rate limits based on your quota
+    - Provider-specific settings
+  </Step>
+  
+  <Step title="Update API calls (if using Python API)">
+    Remove any `multi_*_search` calls and replace with single search methods.
+  </Step>
+  
+  <Step title="Test the migration">
+    Run a query to verify everything works:
+    
+    ```bash
+    graphrag query "test query" --root ./my-project --method global
+    ```
+  </Step>
+</Steps>
+
+## Migration to v2
+
+GraphRAG v2 renamed index tables for clarity.
+
+### Overview
+
+**Migration notebook**: `docs/examples_notebooks/index_migration_to_v2.ipynb`
+
+### Table renames
+
+All tables were renamed to simply describe their contents:
+
+| Old Name (v1) | New Name (v2) |
+|---------------|---------------|
+| `create_final_entities` | `entities` |
+| `create_final_nodes` | `nodes` |
+| `create_final_communities` | `communities` |
+| `create_final_community_reports` | `community_reports` |
+| `create_final_text_units` | `text_units` |
+| `create_final_relationships` | `relationships` |
+| `create_final_documents` | `documents` |
+
+### Migration steps
+
+<Steps>
+  <Step title="Run migration notebook">
+    ```bash
+    jupyter notebook docs/examples_notebooks/index_migration_to_v2.ipynb
+    ```
+  </Step>
+  
+  <Step title="Update configuration">
+    ```bash
+    graphrag init --root ./my-project --force
+    ```
+  </Step>
+  
+  <Step title="Verify table names">
+    Check your output directory - tables should have new names:
+    
+    ```bash
+    ls ./my-project/output/*.parquet
+    ```
+  </Step>
+</Steps>
+
+## Migration to v1
+
+GraphRAG v1 introduced vector stores and streamlined the data model.
+
+### Overview
+
+**Migration notebook**: `docs/examples_notebooks/index_migration_to_v1.ipynb`
+
+### Major changes
+
+<AccordionGroup>
+  <Accordion title="Vector store requirement">
+    v1 requires a vector store for embeddings.
+    
+    **New configuration**:
+    ```yaml
+    vector_store:
+      type: lancedb
+      db_uri: ./lancedb
+    ```
+    
+    Default uses local LanceDB. For production, consider Azure AI Search.
+  </Accordion>
+  
+  <Accordion title="Data model updates">
+    **ID fields**:
+    - Consistent use of `id` and `human_readable_id`
+    - Integer IDs stored as ints (not strings)
+    
+    **Field renames**:
+    - `document.raw_content` → `document.text`
+    - `entity.name` → `entity.title`
+    - `relationship.rank` → `relationship.combined_degree`
+    
+    **Removed fields**:
+    - `relationship.source_degree`
+    - `relationship.target_degree`
+    - All embedding columns (now in vector store)
+    
+    **Community IDs**:
+    - `id` now uses proper UUID
+    - `community` and `human_readable_id` retain short IDs
+  </Accordion>
+  
+  <Accordion title="New required embeddings">
+    v1 added embeddings for DRIFT search and base RAG:
+    
+    - `entity_description` embeddings
+    - `community_full_content` embeddings
+    - `text_unit_text` embeddings
+  </Accordion>
+  
+  <Accordion title="Deprecated timestamp paths">
+    **Before v1**:
+    ```yaml
+    storage:
+      base_dir: "output/${timestamp}/artifacts"  # ❌
+    
+    reporting:
+      base_dir: "output/${timestamp}/reports"  # ❌
+    ```
+    
+    **After v1**:
+    ```yaml
+    storage:
+      base_dir: "output"  # ✓ Static path
+    
+    reporting:
+      base_dir: "output"  # ✓ Static path
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Migration steps
+
+<Steps>
+  <Step title="Update configuration">
+    ```bash
+    graphrag init --root ./my-project --force
+    ```
+    
+    Note the new `vector_store` configuration block.
+  </Step>
+  
+  <Step title="Remove timestamp paths">
+    Edit `settings.yaml` or environment variables:
+    
+    ```bash
+    # In .env
+    GRAPHRAG_STORAGE_BASE_DIR=output
+    GRAPHRAG_REPORTING_BASE_DIR=output
+    ```
+  </Step>
+  
+  <Step title="Run migration notebook">
+    ```bash
+    jupyter notebook docs/examples_notebooks/index_migration_to_v1.ipynb
+    ```
+  </Step>
+  
+  <Step title="Re-index with vector store">
+    Run indexing to populate the vector store:
+    
+    ```bash
+    graphrag index --root ./my-project
+    ```
+    
+    This leverages your existing cache for LLM calls.
+  </Step>
+</Steps>
+
+## Best practices
+
+### Always backup before upgrading
+
+```bash
+# Complete project backup
+tar -czf my-project-backup-$(date +%Y%m%d).tar.gz ./my-project
+
+# Or selective backup
+mkdir -p backups
+cp settings.yaml backups/settings.yaml.$(date +%Y%m%d)
+cp -r prompts backups/prompts.$(date +%Y%m%d)
+cp .env backups/.env.$(date +%Y%m%d)
+```
+
+### Test on a copy first
+
+```bash
+cp -r ./my-project ./my-project-test
+cd ./my-project-test
+# Upgrade and test here first
+```
+
+### Use cache to avoid re-indexing costs
+
+GraphRAG's cache prevents redundant LLM calls:
+
+```yaml settings.yaml
+cache:
+  type: file
+  base_dir: ./cache
+```
+
+After migration, re-indexing will use cached LLM responses, saving time and money.
+
+### Track your version
+
+Add version info to your project:
+
+```yaml settings.yaml
+name: "my-project"
+# Add version metadata
+metadata:
+  graphrag_version: "3.0.0"
+  last_updated: "2024-03-15"
+  migration_notes: "Migrated from v2 to v3"
+```
+
+### Read release notes
+
+Before upgrading, review:
+- [GitHub Releases](https://github.com/microsoft/graphrag/releases)
+- [Breaking Changes](https://github.com/microsoft/graphrag/blob/main/breaking-changes.md)
+- Version-specific migration notebooks
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Migration notebook fails">
+    **Possible causes**:
+    - Corrupted parquet files
+    - Missing columns
+    - Incompatible data types
+    
+    **Solutions**:
+    - Check notebook output for specific error
+    - Verify parquet files can be read: `pd.read_parquet("output/entities.parquet")`
+    - Re-index from scratch if data is corrupted
+  </Accordion>
+  
+  <Accordion title="Configuration validation errors">
+    **Solution**:
+    - Run dry-run to identify issues:
+    ```bash
+    graphrag index --root ./my-project --dry-run --verbose
+    ```
+    - Compare your config to the latest template
+    - Check for removed or renamed settings
+  </Accordion>
+  
+  <Accordion title="Query fails after migration">
+    **Common issues**:
+    - Old parquet file names
+    - Missing vector store setup
+    - Incompatible data schema
+    
+    **Solutions**:
+    - Run the appropriate migration notebook
+    - Verify vector store configuration
+    - Re-index if needed
+  </Accordion>
+  
+  <Accordion title="Python API import errors">
+    **v3 specific**:
+    ```python
+    # This will fail in v3
+    from graphrag.api import multi_global_search  # ❌
+    
+    # Use this instead
+    from graphrag.api import global_search  # ✓
+    ```
+    
+    Update all import statements to use single search methods.
+  </Accordion>
+</AccordionGroup>
+
+## Version compatibility matrix
+
+| GraphRAG Version | Python Version | Key Features | Data Model Version |
+|------------------|----------------|--------------|-------------------|
+| 3.x | ≥3.10 | LiteLLM, simplified config | v3 |
+| 2.x | ≥3.10 | Renamed tables | v2 |
+| 1.x | ≥3.10 | Vector stores, streamlined model | v1 |
+| &lt;1.0 | ≥3.10 | Pre-release | v0 |
+
+## Getting help
+
+If you encounter issues during migration:
+
+1. Check the [breaking changes document](https://github.com/microsoft/graphrag/blob/main/breaking-changes.md)
+2. Review [GitHub Issues](https://github.com/microsoft/graphrag/issues)
+3. Ask in [GitHub Discussions](https://github.com/microsoft/graphrag/discussions)
+4. Consult version-specific migration notebooks
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/configuration/overview">
+    Learn about all config options
+  </Card>
+  <Card title="Best practices" icon="lightbulb" href="/guides/best-practices">
+    Optimize your implementation
+  </Card>
+  <Card title="CLI usage" icon="terminal" href="/guides/cli-usage">
+    Master the command-line interface
+  </Card>
+  <Card title="Python API" icon="code" href="/guides/python-api">
+    Use GraphRAG programmatically
+  </Card>
+</CardGroup>

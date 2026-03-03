@@ -1,0 +1,148 @@
+---
+title: graphrag index
+description: Build a knowledge graph index from your documents
+---
+
+The `index` command builds a knowledge graph index from your source documents by extracting entities, relationships, and communities.
+
+## Usage
+
+```bash
+graphrag index [OPTIONS]
+```
+
+## Options
+
+<ParamField path="--root" type="string" default="current directory">
+  The project root directory containing the `settings.yaml` configuration file.
+  
+  **Aliases**: `-r`
+</ParamField>
+
+<ParamField path="--method" type="string" default="standard">
+  The indexing method to use.
+  
+  **Aliases**: `-m`
+  
+  Available methods:
+  - `standard` - Traditional GraphRAG indexing with all graph construction and summarization performed by an LLM
+  - `fast` - Fast indexing using NLP for graph construction and LLM for summarization
+</ParamField>
+
+<ParamField path="--verbose" type="boolean" default="false">
+  Run the indexing pipeline with verbose logging to see detailed progress information.
+  
+  **Aliases**: `-v`
+</ParamField>
+
+<ParamField path="--dry-run" type="boolean" default="false">
+  Run the indexing pipeline without executing any steps. Useful for inspecting and validating the configuration before running.
+</ParamField>
+
+<ParamField path="--cache" type="boolean" default="true">
+  Use LLM response caching to avoid redundant API calls and reduce costs.
+  
+  Use `--no-cache` to disable caching.
+</ParamField>
+
+<ParamField path="--skip-validation" type="boolean" default="false">
+  Skip any preflight validation checks. Useful when running indexing without LLM steps or in specialized configurations.
+</ParamField>
+
+## Examples
+
+### Basic indexing
+
+Run indexing with default settings:
+
+```bash
+graphrag index
+```
+
+### Specify project directory
+
+```bash
+graphrag index --root ./my-project
+```
+
+### Use fast indexing method
+
+```bash
+graphrag index --method fast
+```
+
+Fast indexing uses NLP-based entity extraction instead of LLM-based extraction, which is faster and cheaper but may be less accurate.
+
+### Verbose logging
+
+```bash
+graphrag index --verbose
+```
+
+### Dry run to validate configuration
+
+```bash
+graphrag index --dry-run
+```
+
+This will load and validate your configuration without actually running the indexing pipeline.
+
+### Disable caching
+
+```bash
+graphrag index --no-cache
+```
+
+### Skip validation
+
+```bash
+graphrag index --skip-validation
+```
+
+## Output
+
+The indexing pipeline creates several output files in the `output/` directory:
+
+- **`entities.parquet`** - Extracted entities with descriptions and embeddings
+- **`relationships.parquet`** - Relationships between entities
+- **`communities.parquet`** - Detected community structure
+- **`community_reports.parquet`** - Summarized reports for each community
+- **`text_units.parquet`** - Chunked text units with embeddings
+- **`covariates.parquet`** - Extracted claims (if claim extraction is enabled)
+
+## Indexing process
+
+The indexing pipeline performs the following steps:
+
+1. **Document chunking** - Split documents into manageable text chunks
+2. **Entity extraction** - Extract entities and relationships using LLM or NLP
+3. **Entity resolution** - Merge duplicate entities and summarize descriptions
+4. **Community detection** - Detect hierarchical communities using Leiden algorithm
+5. **Community summarization** - Generate natural language summaries for each community
+6. **Embedding generation** - Create vector embeddings for entities and text units
+
+## Performance considerations
+
+- **Standard method**: More accurate but slower and more expensive (uses LLM for all extractions)
+- **Fast method**: Faster and cheaper but potentially less accurate (uses NLP for entity extraction)
+- **Caching**: Keep caching enabled to avoid redundant API calls during re-runs
+- **Concurrent requests**: Adjust `concurrent_requests` in `settings.yaml` to control API rate limits
+
+## Error handling
+
+The indexing command will exit with status code 1 if any errors are encountered during the pipeline. Check the logs for detailed error messages.
+
+Common issues:
+
+- **Missing API key**: Ensure `GRAPHRAG_API_KEY` is set in your `.env` file
+- **Invalid configuration**: Run with `--dry-run` to validate your configuration
+- **Rate limits**: Reduce `concurrent_requests` in `settings.yaml`
+- **Out of memory**: Reduce `chunk_size` or process fewer documents
+
+## Next steps
+
+After building an index:
+
+- [Query your knowledge graph](/cli/query)
+- [Update the index with new data](/cli/update)
+- [Configure indexing settings](/indexing/overview)

@@ -1,0 +1,506 @@
+---
+title: Research analysis
+description: Use GraphRAG to analyze research papers, extract insights, and discover knowledge connections
+---
+
+GraphRAG excels at processing large collections of research documents to extract entities, relationships, and insights. This guide demonstrates how to use GraphRAG for academic and scientific research analysis.
+
+## Use case overview
+
+Research analysis with GraphRAG enables:
+
+- **Entity extraction** - Identify researchers, institutions, concepts, methods, and findings
+- **Citation networks** - Map how papers reference and build on each other
+- **Concept relationships** - Discover how scientific ideas relate and evolve
+- **Trend identification** - Identify emerging research themes and patterns
+- **Gap analysis** - Find underexplored connections and research opportunities
+
+## Example: Analyzing AI/ML research papers
+
+Let's walk through analyzing a corpus of machine learning research papers.
+
+### Data preparation
+
+<Steps>
+  <Step title="Collect research papers">
+    Gather your research documents in a structured format:
+    
+    ```csv input/papers.csv
+    id,title,abstract,authors,year,venue,citations,keywords
+    1,"Attention Is All You Need","The dominant...","Vaswani et al.",2017,"NeurIPS",45000,"transformers;attention;neural networks"
+    2,"BERT: Pre-training of Deep...","We introduce...","Devlin et al.",2018,"NAACL",35000,"language models;BERT;NLP"
+    3,"Language Models are Few-Shot...","Recent work has...","Brown et al.",2020,"NeurIPS",12000,"GPT-3;language models;few-shot"
+    ```
+  </Step>
+
+  <Step title="Create custom prompts">
+    Define research-specific entities and relationships:
+    
+    ```txt prompts/research_entity_extraction.txt
+    -Goal-
+    Extract scientific entities and relationships from research papers.
+    
+    -Entity Types-
+    - RESEARCHER: Authors and cited researchers (e.g., "Vaswani", "Devlin")
+    - INSTITUTION: Universities, research labs, companies (e.g., "Google", "MIT")
+    - CONCEPT: Scientific concepts, theories, methods (e.g., "attention mechanism", "transformers")
+    - MODEL: Specific models or systems (e.g., "BERT", "GPT-3", "ResNet")
+    - DATASET: Training or evaluation datasets (e.g., "ImageNet", "GLUE")
+    - METRIC: Performance metrics (e.g., "accuracy", "BLEU score")
+    - TASK: Research tasks or problems (e.g., "machine translation", "image classification")
+    
+    -Relationship Types-
+    - AUTHORED: Researcher authored paper
+    - AFFILIATED_WITH: Researcher at institution
+    - INTRODUCES: Paper introduces concept/model
+    - USES: Paper uses method/dataset
+    - IMPROVES_ON: Model improves on previous model
+    - EVALUATED_ON: Model evaluated on dataset/task
+    - CITES: Paper cites other work
+    - APPLIES_TO: Concept applies to task
+    
+    -Instructions-
+    1. Identify all entities in the abstract and paper text
+    2. Preserve exact names for researchers, models, and datasets
+    3. Extract key concepts even if not explicitly named
+    4. Link researchers to their institutions
+    5. Connect models to the concepts they use and tasks they address
+    ```
+  </Step>
+
+  <Step title="Configure GraphRAG">
+    Update `settings.yaml` for research corpus:
+    
+    ```yaml settings.yaml
+    input:
+      type: csv
+      file_pattern: .*\.csv$
+      id_column: id
+      title_column: title
+      text_column: abstract
+    
+    chunking:
+      size: 600  # Larger chunks for academic text
+      overlap: 100
+      prepend_metadata: ["authors", "year", "venue", "keywords"]
+    
+    entity_extraction:
+      prompt: prompts/research_entity_extraction.txt
+      entity_types: [RESEARCHER, INSTITUTION, CONCEPT, MODEL, DATASET, METRIC, TASK]
+    
+    community_reports:
+      prompt: prompts/research_community_report.txt
+    ```
+  </Step>
+
+  <Step title="Run indexing">
+    Process your research corpus:
+    
+    ```bash
+    graphrag index --root ./research_analysis
+    ```
+  </Step>
+</Steps>
+
+## Research queries
+
+Once indexed, you can ask sophisticated questions about your research corpus:
+
+### Global search queries
+
+For high-level insights across all papers:
+
+<AccordionGroup>
+  <Accordion title="Identify research trends">
+    ```bash
+    graphrag query \
+      "What are the major research trends in this corpus?" \
+      --method global
+    ```
+    
+    **Response**: Identifies dominant themes like "transformer architectures", "self-supervised learning", "large-scale pretraining", etc.
+  </Accordion>
+  
+  <Accordion title="Key institutions">
+    ```bash
+    graphrag query \
+      "Which institutions are leading research in this field?" \
+      --method global
+    ```
+    
+    **Response**: Ranks institutions by their contribution and influence in the corpus.
+  </Accordion>
+  
+  <Accordion title="Evolution of concepts">
+    ```bash
+    graphrag query \
+      "How have the main concepts evolved over time?" \
+      --method global
+    ```
+    
+    **Response**: Traces how ideas like "attention mechanisms" evolved into "transformers" and beyond.
+  </Accordion>
+  
+  <Accordion title="Research gaps">
+    ```bash
+    graphrag query \
+      "What research areas appear underexplored based on this corpus?" \
+      --method global
+    ```
+    
+    **Response**: Identifies potential gaps by analyzing which concepts are mentioned but not deeply explored.
+  </Accordion>
+</AccordionGroup>
+
+### Local search queries
+
+For specific details about entities:
+
+<AccordionGroup>
+  <Accordion title="Researcher profiles">
+    ```bash
+    graphrag query \
+      "What are the main contributions of Vaswani?" \
+      --method local
+    ```
+    
+    **Response**: Details the researcher's papers, key concepts introduced, and impact.
+  </Accordion>
+  
+  <Accordion title="Model details">
+    ```bash
+    graphrag query \
+      "What is BERT and how does it work?" \
+      --method local
+    ```
+    
+    **Response**: Explains the model architecture, training approach, and applications.
+  </Accordion>
+  
+  <Accordion title="Concept relationships">
+    ```bash
+    graphrag query \
+      "How are transformers related to attention mechanisms?" \
+      --method local
+    ```
+    
+    **Response**: Describes the technical relationship and evolution.
+  </Accordion>
+  
+  <Accordion title="Dataset usage">
+    ```bash
+    graphrag query \
+      "Which papers use the GLUE benchmark and what were their results?" \
+      --method local
+    ```
+    
+    **Response**: Lists papers, their models, and performance metrics.
+  </Accordion>
+</AccordionGroup>
+
+### DRIFT search queries
+
+For complex multi-hop analysis:
+
+```python
+# Trace research lineage
+result = await drift_search.search(
+    "How did the transformer architecture influence modern language models like GPT and BERT?"
+)
+
+# Cross-domain connections
+result = await drift_search.search(
+    "How have computer vision techniques influenced natural language processing?"
+)
+
+# Collaboration networks
+result = await drift_search.search(
+    "How are researchers at Google and OpenAI connected through co-authors and citations?"
+)
+```
+
+## Advanced analysis
+
+### Temporal analysis
+
+Track how research evolves over time:
+
+```python
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Load entities with temporal data
+entities = pd.read_parquet('./output/entities.parquet')
+
+# Filter for CONCEPT entities
+concepts = entities[entities['type'] == 'CONCEPT']
+
+# Analyze concept emergence by year
+# (assuming year is in entity metadata)
+concept_timeline = concepts.groupby(['name', 'year']).size().unstack(fill_value=0)
+
+# Plot concept trends
+concept_timeline.T.plot(figsize=(12, 6))
+plt.title('Emergence of Research Concepts Over Time')
+plt.xlabel('Year')
+plt.ylabel('Mentions')
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.tight_layout()
+plt.show()
+```
+
+### Citation network analysis
+
+```python
+import networkx as nx
+
+# Load relationships
+relationships = pd.read_parquet('./output/relationships.parquet')
+
+# Create citation network
+citations = relationships[relationships['description'].str.contains('cites', case=False)]
+
+G = nx.DiGraph()
+for _, row in citations.iterrows():
+    G.add_edge(row['source'], row['target'], weight=row.get('weight', 1))
+
+# Calculate influential papers (high in-degree)
+influential = sorted(G.in_degree(), key=lambda x: x[1], reverse=True)[:10]
+
+print("Most cited papers:")
+for paper, citations in influential:
+    print(f"{paper}: {citations} citations")
+
+# Identify seminal papers (high betweenness centrality)
+betweenness = nx.betweenness_centrality(G)
+seminal = sorted(betweenness.items(), key=lambda x: x[1], reverse=True)[:10]
+
+print("\nSeminal papers (high betweenness):")
+for paper, score in seminal:
+    print(f"{paper}: {score:.4f}")
+```
+
+### Collaboration analysis
+
+```python
+# Find research communities
+from graphrag.query.community_detection import detect_communities
+
+# Load author collaboration network
+collaborations = relationships[
+    relationships['description'].str.contains('co-author|collaborated', case=False)
+]
+
+# Build collaboration graph
+G_collab = nx.Graph()
+for _, row in collaborations.iterrows():
+    G_collab.add_edge(row['source'], row['target'])
+
+# Detect research communities
+communities = nx.community.greedy_modularity_communities(G_collab)
+
+print(f"Found {len(communities)} research communities")
+
+for i, community in enumerate(communities[:5], 1):
+    print(f"\nCommunity {i} ({len(community)} researchers):")
+    print(", ".join(list(community)[:10]))
+```
+
+## Specialized analyses
+
+### Literature review generation
+
+```bash
+# Generate comprehensive literature review
+graphrag query \
+  "Provide a structured literature review of transformer-based language models, \
+  including key papers, methodological evolution, and current state of the art" \
+  --method global
+```
+
+### Research gap identification
+
+```python
+# Identify underexplored connections
+result = await drift_search.search(
+    "What concepts are frequently mentioned together but lack direct research connecting them?"
+)
+
+print(result.response)
+```
+
+### Methodology tracking
+
+```bash
+graphrag query \
+  "How have the evaluation methodologies for language models evolved?" \
+  --method global
+```
+
+## Integration with research tools
+
+### Export to visualization tools
+
+```python
+import json
+
+# Export for Gephi or other network visualization tools
+entities = pd.read_parquet('./output/entities.parquet')
+relationships = pd.read_parquet('./output/relationships.parquet')
+
+# Create nodes file
+nodes = entities[['name', 'type', 'description']].to_dict('records')
+with open('nodes.json', 'w') as f:
+    json.dump(nodes, f, indent=2)
+
+# Create edges file
+edges = relationships[['source', 'target', 'description', 'weight']].to_dict('records')
+with open('edges.json', 'w') as f:
+    json.dump(edges, f, indent=2)
+```
+
+### Integration with reference managers
+
+```python
+import bibtexparser
+
+# Import from BibTeX
+with open('references.bib') as bibtex_file:
+    bib_database = bibtexparser.load(bibtex_file)
+
+# Convert to GraphRAG CSV format
+papers = []
+for entry in bib_database.entries:
+    papers.append({
+        'id': entry.get('ID'),
+        'title': entry.get('title'),
+        'authors': entry.get('author'),
+        'year': entry.get('year'),
+        'venue': entry.get('journal') or entry.get('booktitle'),
+        'abstract': entry.get('abstract', ''),
+    })
+
+papers_df = pd.DataFrame(papers)
+papers_df.to_csv('input/papers.csv', index=False)
+```
+
+## Best practices for research analysis
+
+<CardGroup cols={2}>
+  <Card title="Use abstracts and full text" icon="file-lines">
+    Include both for comprehensive extraction; abstracts for overview, full text for details
+  </Card>
+  
+  <Card title="Maintain metadata" icon="tags">
+    Keep year, venue, citations for temporal and impact analysis
+  </Card>
+  
+  <Card title="Normalize entity names" icon="spell-check">
+    Handle author name variations ("J. Smith" vs "John Smith")
+  </Card>
+  
+  <Card title="Update regularly" icon="rotate">
+    Re-index as new papers are published to track emerging trends
+  </Card>
+</CardGroup>
+
+## Example outputs
+
+### Sample entity extraction
+
+```json
+{
+  "entities": [
+    {
+      "name": "BERT",
+      "type": "MODEL",
+      "description": "Bidirectional Encoder Representations from Transformers, a pre-trained language model"
+    },
+    {
+      "name": "Jacob Devlin",
+      "type": "RESEARCHER",
+      "description": "Researcher at Google AI Language, lead author of BERT paper"
+    },
+    {
+      "name": "masked language modeling",
+      "type": "CONCEPT",
+      "description": "Training objective that masks tokens and predicts them from context"
+    }
+  ],
+  "relationships": [
+    {
+      "source": "Jacob Devlin",
+      "target": "BERT",
+      "description": "authored and introduced"
+    },
+    {
+      "source": "BERT",
+      "target": "masked language modeling",
+      "description": "uses as primary training objective"
+    }
+  ]
+}
+```
+
+## Multi-domain research
+
+For cross-disciplinary research:
+
+```yaml
+entity_extraction:
+  entity_types: [
+    # Computer Science
+    ALGORITHM, MODEL, SYSTEM,
+    # Biology
+    PROTEIN, GENE, ORGANISM,
+    # Chemistry  
+    MOLECULE, REACTION, COMPOUND,
+    # Shared
+    RESEARCHER, INSTITUTION, CONCEPT, METHOD
+  ]
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Inconsistent entity extraction">
+    **Solution**: Use auto prompt tuning with your research corpus to adapt entity recognition.
+    
+    ```bash
+    graphrag prompt-tune --root . --no-entity-types
+    ```
+  </Accordion>
+  
+  <Accordion title="Missing citations">
+    **Solution**: Ensure citation information is in your input data or extract from full text.
+  </Accordion>
+  
+  <Accordion title="Author name variations">
+    **Solution**: Pre-process to normalize names or use entity resolution:
+    
+    ```python
+    # Normalize author names
+    df['authors'] = df['authors'].apply(normalize_author_names)
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Document Q&A" icon="comments" href="/examples/use-cases/document-qa">
+    Build question-answering systems for research
+  </Card>
+  
+  <Card title="Custom prompts" icon="pen" href="/examples/custom-prompts">
+    Refine prompts for your research domain
+  </Card>
+  
+  <Card title="Enterprise knowledge" icon="building" href="/examples/use-cases/enterprise-knowledge">
+    Apply to internal research and knowledge bases
+  </Card>
+  
+  <Card title="Visualization guide" icon="chart-network" href="/guides/visualization">
+    Visualize research networks
+  </Card>
+</CardGroup>

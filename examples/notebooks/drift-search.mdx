@@ -1,0 +1,560 @@
+---
+title: DRIFT search notebook
+description: Interactive notebook for understanding DRIFT search - a hybrid approach combining global and local methods
+---
+
+DRIFT (Dynamic Reasoning and Inference with Flexible Traversal) search combines aspects of both global and local search methods to provide flexible, context-aware query responses.
+
+<Note>
+This page references the [drift_search.ipynb](https://github.com/microsoft/graphrag/blob/main/docs/examples_notebooks/drift_search.ipynb) notebook from the GraphRAG repository.
+</Note>
+
+## What is DRIFT search?
+
+DRIFT search uses an iterative approach that:
+
+- Starts with entity-level retrieval like local search
+- Dynamically expands to related communities
+- Performs multi-hop reasoning across the knowledge graph
+- Adapts context based on query complexity
+
+## When to use DRIFT search
+
+DRIFT search is ideal for:
+
+- **Complex multi-hop queries** - "How do organizations influence events?"
+- **Exploratory questions** - "What patterns emerge from X?"
+- **Adaptive reasoning** - Questions requiring both broad and specific context
+- **Relationship traversal** - Following chains of connections
+
+## How DRIFT search works
+
+<Steps>
+  <Step title="Primer phase">
+    Initial entities are retrieved based on semantic similarity to the query.
+  </Step>
+  
+  <Step title="Iterative expansion">
+    The search expands through relationships and communities in multiple iterations ("drift" steps).
+  </Step>
+  
+  <Step title="Context aggregation">
+    Information from entities, relationships, text units, and community reports is combined.
+  </Step>
+  
+  <Step title="Response synthesis">
+    The LLM generates a comprehensive answer using the dynamically assembled context.
+  </Step>
+</Steps>
+
+## Setting up the notebook
+
+### Import required libraries
+
+```python
+import os
+import pandas as pd
+from graphrag.config.enums import ModelType
+from graphrag.config.models.drift_search_config import DRIFTSearchConfig
+from graphrag.config.models.language_model_config import LanguageModelConfig
+from graphrag.language_model.manager import ModelManager
+from graphrag.query.indexer_adapters import (
+    read_indexer_entities,
+    read_indexer_relationships,
+    read_indexer_report_embeddings,
+    read_indexer_reports,
+    read_indexer_text_units,
+)
+from graphrag.query.structured_search.drift_search.drift_context import (
+    DRIFTSearchContextBuilder,
+)
+from graphrag.query.structured_search.drift_search.search import DRIFTSearch
+from graphrag.tokenizer.get_tokenizer import get_tokenizer
+from graphrag_vectors.lancedb import LanceDBVectorStore
+```
+
+### Configure paths
+
+```python
+INPUT_DIR = "./inputs/operation dulce"
+LANCEDB_URI = f"{INPUT_DIR}/lancedb"
+
+COMMUNITY_REPORT_TABLE = "community_reports"
+COMMUNITY_TABLE = "communities"
+ENTITY_TABLE = "entities"
+RELATIONSHIP_TABLE = "relationships"
+TEXT_UNIT_TABLE = "text_units"
+COMMUNITY_LEVEL = 2
+```
+
+## Load data tables
+
+```python
+# Load entities
+entity_df = pd.read_parquet(f"{INPUT_DIR}/{ENTITY_TABLE}.parquet")
+community_df = pd.read_parquet(f"{INPUT_DIR}/{COMMUNITY_TABLE}.parquet")
+entities = read_indexer_entities(entity_df, community_df, COMMUNITY_LEVEL)
+
+# Connect to entity embeddings
+description_embedding_store = LanceDBVectorStore(
+    db_uri=LANCEDB_URI,
+    index_name="entity_description",
+)
+description_embedding_store.connect()
+
+# Connect to community report embeddings
+full_content_embedding_store = LanceDBVectorStore(
+    db_uri=LANCEDB_URI,
+    index_name="community_full_content",
+)
+full_content_embedding_store.connect()
+
+print(f"Entity count: {len(entity_df)}")
+
+# Load relationships
+relationship_df = pd.read_parquet(f"{INPUT_DIR}/{RELATIONSHIP_TABLE}.parquet")
+relationships = read_indexer_relationships(relationship_df)
+print(f"Relationship count: {len(relationship_df)}")
+
+# Load text units
+text_unit_df = pd.read_parquet(f"{INPUT_DIR}/{TEXT_UNIT_TABLE}.parquet")
+text_units = read_indexer_text_units(text_unit_df)
+print(f"Text unit records: {len(text_unit_df)}")
+
+# Load community reports with embeddings
+report_df = pd.read_parquet(f"{INPUT_DIR}/{COMMUNITY_REPORT_TABLE}.parquet")
+reports = read_indexer_reports(report_df, community_df, COMMUNITY_LEVEL)
+read_indexer_report_embeddings(reports, full_content_embedding_store)
+```
+
+## Configure language models
+
+```python
+api_key = os.environ["GRAPHRAG_API_KEY"]
+
+# Chat model
+chat_config = LanguageModelConfig(
+    api_key=api_key,
+    type=ModelType.Chat,
+    model_provider="openai",
+    model="gpt-4.1",
+    max_retries=20,
+)
+chat_model = ModelManager().get_or_create_chat_model(
+    name="drift_search",
+    model_type=ModelType.Chat,
+    config=chat_config,
+)
+
+tokenizer = get_tokenizer(chat_config)
+
+# Embedding model
+embedding_config = LanguageModelConfig(
+    api_key=api_key,
+    type=ModelType.Embedding,
+    model_provider="openai",
+    model="text-embedding-3-large",
+    max_retries=20,
+)
+text_embedder = ModelManager().get_or_create_embedding_model(
+    name="drift_search_embedding",
+    model_type=ModelType.Embedding,
+    config=embedding_config,
+)
+```
+
+## Configure DRIFT parameters
+
+```python
+drift_params = DRIFTSearchConfig(
+    primer_folds=1,        # Number of initial entity retrieval rounds
+    drift_k_followups=3,   # Number of follow-up expansions per iteration
+    n_depth=3,             # Maximum traversal depth
+)
+```
+
+<Tabs>
+  <Tab title="primer_folds">
+    Number of initial retrieval rounds to seed the search.
+    - `1` = Single retrieval (faster)
+    - `2-3` = Multiple perspectives (more comprehensive)
+  </Tab>
+  
+  <Tab title="drift_k_followups">
+    How many related entities/communities to explore at each step.
+    - `3` = Focused exploration (default)
+    - `5-10` = Broader exploration (higher cost)
+  </Tab>
+  
+  <Tab title="n_depth">
+    Maximum number of hops from initial entities.
+    - `2` = Nearby context only
+    - `3` = Moderate reach (default)
+    - `4+` = Deep traversal (expensive)
+  </Tab>
+</Tabs>
+
+## Create search engine
+
+```python
+context_builder = DRIFTSearchContextBuilder(
+    model=chat_model,
+    text_embedder=text_embedder,
+    entities=entities,
+    relationships=relationships,
+    reports=reports,
+    entity_text_embeddings=description_embedding_store,
+    text_units=text_units,
+    tokenizer=tokenizer,
+    config=drift_params,
+)
+
+search = DRIFTSearch(
+    model=chat_model,
+    context_builder=context_builder,
+    tokenizer=tokenizer
+)
+```
+
+## Perform DRIFT search
+
+```python
+resp = await search.search("Who is agent Mercer?")
+print(resp.response)
+```
+
+### Inspect search results
+
+```python
+# View the response
+resp.response
+
+# Examine context data
+print(resp.context_data)
+```
+
+## Example queries
+
+<AccordionGroup>
+  <Accordion title="Entity exploration">
+    ```python
+    result = await search.search("Who is agent Mercer?")
+    print(result.response)
+    
+    # DRIFT will:
+    # 1. Find Agent Mercer entity
+    # 2. Explore related entities and relationships
+    # 3. Include relevant community context
+    # 4. Synthesize comprehensive answer
+    ```
+  </Accordion>
+  
+  <Accordion title="Multi-hop reasoning">
+    ```python
+    result = await search.search(
+        "How do the different organizations interact with the Dulce base?"
+    )
+    print(result.response)
+    
+    # DRIFT will traverse:
+    # Organization entities -> relationships -> Dulce base
+    # Multiple hops to connect all relevant information
+    ```
+  </Accordion>
+  
+  <Accordion title="Pattern discovery">
+    ```python
+    result = await search.search(
+        "What patterns emerge in the relationships between key characters?"
+    )
+    print(result.response)
+    
+    # DRIFT explores graph structure iteratively
+    # to identify patterns across multiple entities
+    ```
+  </Accordion>
+  
+  <Accordion title="Causal reasoning">
+    ```python
+    result = await search.search(
+        "What events led to the current situation at the facility?"
+    )
+    print(result.response)
+    
+    # DRIFT follows temporal and causal chains
+    # through multiple levels of the knowledge graph
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Understanding DRIFT behavior
+
+### Search progression
+
+<Steps>
+  <Step title="Initial retrieval (Primer)">
+    DRIFT starts by retrieving entities most relevant to your query using semantic search.
+    
+    ```python
+    # With primer_folds=2, DRIFT performs 2 rounds of retrieval
+    # to capture different aspects of the query
+    ```
+  </Step>
+  
+  <Step title="First drift iteration">
+    From initial entities, DRIFT expands to:
+    - Connected entities via relationships
+    - Associated text units
+    - Containing communities
+    
+    ```python
+    # drift_k_followups=3 means exploring 3 most relevant
+    # connections at each step
+    ```
+  </Step>
+  
+  <Step title="Subsequent iterations">
+    DRIFT continues expanding up to `n_depth` hops, gathering increasingly distant but potentially relevant context.
+  </Step>
+  
+  <Step title="Response generation">
+    All gathered context is synthesized into a comprehensive answer.
+  </Step>
+</Steps>
+
+## Tuning DRIFT parameters
+
+### For different query types
+
+<Tabs>
+  <Tab title="Simple entity queries">
+    ```python
+    # Minimal exploration for straightforward questions
+    drift_params = DRIFTSearchConfig(
+        primer_folds=1,
+        drift_k_followups=2,
+        n_depth=2,
+    )
+    ```
+  </Tab>
+  
+  <Tab title="Complex analysis">
+    ```python
+    # Deep exploration for comprehensive analysis
+    drift_params = DRIFTSearchConfig(
+        primer_folds=2,
+        drift_k_followups=5,
+        n_depth=4,
+    )
+    ```
+  </Tab>
+  
+  <Tab title="Balanced approach">
+    ```python
+    # Default configuration for most queries
+    drift_params = DRIFTSearchConfig(
+        primer_folds=1,
+        drift_k_followups=3,
+        n_depth=3,
+    )
+    ```
+  </Tab>
+</Tabs>
+
+## Performance considerations
+
+<CardGroup cols={2}>
+  <Card title="Cost control" icon="dollar-sign">
+    DRIFT can be expensive due to iterative LLM calls. Control costs with:
+    - Lower `n_depth` values
+    - Fewer `drift_k_followups`
+    - Reduce `primer_folds`
+  </Card>
+  
+  <Card title="Response time" icon="clock">
+    Each drift iteration adds latency. For faster responses:
+    - Set `n_depth=2`
+    - Use `primer_folds=1`
+    - Consider local search for simple queries
+  </Card>
+  
+  <Card title="Quality vs. speed" icon="balance-scale">
+    Higher parameters = better coverage but slower and more expensive:
+    - Test with low values first
+    - Increase gradually as needed
+    - Monitor token usage
+  </Card>
+  
+  <Card title="Query complexity" icon="brain">
+    Match parameters to query complexity:
+    - Simple: Low parameters
+    - Complex: High parameters
+    - Adaptive: Start low, increase if needed
+  </Card>
+</CardGroup>
+
+## Comparing search methods
+
+| Feature | DRIFT Search | Local Search | Global Search |
+|---------|--------------|--------------|---------------|
+| **Approach** | Iterative graph traversal | Single-step retrieval | Map-reduce over reports |
+| **Context** | Dynamic, adaptive | Fixed entity-centric | Community-level |
+| **Best for** | Complex, multi-hop | Specific entities | Dataset summaries |
+| **Cost** | Medium-High | Low-Medium | High |
+| **Flexibility** | High | Medium | Low |
+| **Response time** | Medium | Fast | Slow |
+
+## Advanced usage
+
+### Custom traversal strategies
+
+You can influence how DRIFT explores the graph:
+
+```python
+# Emphasize relationship traversal
+drift_params = DRIFTSearchConfig(
+    primer_folds=1,
+    drift_k_followups=5,  # More follow-ups
+    n_depth=3,
+)
+
+# Emphasize initial retrieval quality
+drift_params = DRIFTSearchConfig(
+    primer_folds=3,  # Multiple primer rounds
+    drift_k_followups=2,
+    n_depth=2,
+)
+```
+
+### Analyzing traversal paths
+
+```python
+# Examine what context was gathered
+result = await search.search("Your complex query")
+
+context = result.context_data
+
+# See entities discovered at different depths
+if 'entities' in context:
+    print(f"Entities found: {len(context['entities'])}")
+
+# See relationships traversed
+if 'relationships' in context:
+    print(f"Relationships used: {len(context['relationships'])}")
+
+# See text units included
+if 'sources' in context:
+    print(f"Source chunks: {len(context['sources'])}")
+```
+
+## Use cases
+
+<AccordionGroup>
+  <Accordion title="Investigative analysis">
+    **Query**: "How are different suspects connected to the crime scene?"
+    
+    DRIFT excels here by:
+    - Starting with suspect entities
+    - Traversing relationship chains
+    - Discovering indirect connections
+    - Including relevant evidence from text
+  </Accordion>
+  
+  <Accordion title="Supply chain analysis">
+    **Query**: "How does disruption at supplier X affect our products?"
+    
+    DRIFT can:
+    - Map supplier relationships
+    - Follow dependencies through tiers
+    - Identify affected products
+    - Include contextual details
+  </Accordion>
+  
+  <Accordion title="Research synthesis">
+    **Query**: "What research links concept A to outcome B?"
+    
+    DRIFT helps by:
+    - Finding relevant research entities
+    - Tracing citation and influence chains
+    - Bridging concepts through intermediates
+    - Synthesizing findings
+  </Accordion>
+  
+  <Accordion title="Social network analysis">
+    **Query**: "How are these individuals connected through mutual contacts?"
+    
+    DRIFT navigates:
+    - Direct relationships
+    - Mutual connections (2+ hops)
+    - Shared group memberships
+    - Interaction contexts
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Incomplete or shallow answers">
+    Solutions:
+    - Increase `n_depth` to explore further
+    - Increase `drift_k_followups` for broader exploration
+    - Add more `primer_folds` for better initial retrieval
+    - Check if relevant entities exist in knowledge graph
+  </Accordion>
+  
+  <Accordion title="Too slow or expensive">
+    Solutions:
+    - Reduce `n_depth` to 2
+    - Lower `drift_k_followups` to 2
+    - Set `primer_folds` to 1
+    - Consider local search for simpler queries
+  </Accordion>
+  
+  <Accordion title="Irrelevant information included">
+    Solutions:
+    - Reduce `n_depth` to avoid distant connections
+    - Lower `drift_k_followups` for more focused exploration
+    - Improve entity extraction during indexing
+    - Refine your query to be more specific
+  </Accordion>
+</AccordionGroup>
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Start conservative" icon="gauge-simple">
+    Begin with low parameter values and increase as needed
+  </Card>
+  
+  <Card title="Match complexity" icon="puzzle-piece">
+    Use higher parameters only for genuinely complex queries
+  </Card>
+  
+  <Card title="Monitor costs" icon="chart-line">
+    Track token usage and adjust parameters accordingly
+  </Card>
+  
+  <Card title="Compare methods" icon="code-compare">
+    Try local/global search first; use DRIFT when they fall short
+  </Card>
+</CardGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Search comparison" icon="code-compare" href="/examples/notebooks/comparison">
+    Compare all search methods side-by-side
+  </Card>
+  
+  <Card title="Local search" icon="magnifying-glass" href="/examples/notebooks/local-search">
+    Learn about local search for entity-specific queries
+  </Card>
+  
+  <Card title="Global search" icon="globe" href="/examples/notebooks/global-search">
+    Understand global search for dataset-wide questions
+  </Card>
+  
+  <Card title="DRIFT documentation" icon="book" href="/query/drift-search">
+    Complete DRIFT search reference
+  </Card>
+</CardGroup>

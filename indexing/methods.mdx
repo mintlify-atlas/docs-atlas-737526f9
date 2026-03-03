@@ -1,0 +1,273 @@
+---
+title: Indexing methods
+description: Compare Standard GraphRAG and FastGraphRAG indexing methods to choose the best approach for your use case
+---
+
+GraphRAG is a platform for research into RAG indexing methods that produce optimal context window content for language models. This page documents the available indexing methods.
+
+## Standard GraphRAG
+
+This is the method described in the original [blog post](https://www.microsoft.com/en-us/research/blog/graphrag-unlocking-llm-discovery-on-narrative-private-data/). Standard uses a language model for all reasoning tasks.
+
+### How it works
+
+<Steps>
+  <Step title="Entity extraction">
+    LLM is prompted to extract named entities and provide a description from each text unit.
+  </Step>
+  
+  <Step title="Relationship extraction">
+    LLM is prompted to describe the relationship between each pair of entities in each text unit.
+  </Step>
+  
+  <Step title="Entity summarization">
+    LLM is prompted to combine the descriptions for every instance of an entity found across text units into a single summary.
+  </Step>
+  
+  <Step title="Relationship summarization">
+    LLM is prompted to combine the descriptions for every instance of a relationship found across text units into a single summary.
+  </Step>
+  
+  <Step title="Claim extraction (optional)">
+    LLM is prompted to extract and describe claims from each text unit.
+  </Step>
+  
+  <Step title="Community report generation">
+    Entity and relationship descriptions (and optionally claims) for each community are collected and used to prompt the LLM to generate a summary report.
+  </Step>
+</Steps>
+
+### Usage
+
+<CodeGroup>
+```bash CLI
+graphrag index --method standard
+```
+
+```python Python API
+from graphrag.api.index import build_index
+from graphrag.config.enums import IndexingMethod
+from graphrag.config.models.graph_rag_config import GraphRagConfig
+
+config = GraphRagConfig.from_yaml("settings.yaml")
+
+results = await build_index(
+    config=config,
+    method=IndexingMethod.Standard,  # This is the default
+    verbose=True
+)
+```
+</CodeGroup>
+
+<Note>
+Since Standard is the default method, the `--method` parameter can be omitted on the command line.
+</Note>
+
+## FastGraphRAG
+
+FastGraphRAG is a hybrid technique that substitutes some of the language model reasoning for traditional natural language processing (NLP) methods. This provides a faster and cheaper indexing alternative.
+
+### How it works
+
+<Steps>
+  <Step title="Entity extraction">
+    Entities are noun phrases extracted using NLP libraries such as NLTK and spaCy. There is no description; the source text unit is used for this.
+  </Step>
+  
+  <Step title="Relationship extraction">
+    Relationships are defined as text unit co-occurrence between entity pairs. There is no description.
+  </Step>
+  
+  <Step title="Entity summarization">
+    Not necessary (skipped).
+  </Step>
+  
+  <Step title="Relationship summarization">
+    Not necessary (skipped).
+  </Step>
+  
+  <Step title="Claim extraction">
+    Unused (always skipped).
+  </Step>
+  
+  <Step title="Community report generation">
+    The direct text unit content containing each entity noun phrase is collected and used to prompt the LLM to generate a summary report.
+  </Step>
+</Steps>
+
+### Usage
+
+<CodeGroup>
+```bash CLI
+graphrag index --method fast
+```
+
+```python Python API
+from graphrag.api.index import build_index
+from graphrag.config.enums import IndexingMethod
+from graphrag.config.models.graph_rag_config import GraphRagConfig
+
+config = GraphRagConfig.from_yaml("settings.yaml")
+
+results = await build_index(
+    config=config,
+    method=IndexingMethod.Fast,
+    verbose=True
+)
+```
+</CodeGroup>
+
+### NLP configuration options
+
+FastGraphRAG has several NLP options built in. By default, NLTK + regular expressions are used for noun phrase extraction, which is very fast but primarily suitable for English.
+
+<Tabs>
+  <Tab title="NLTK (default)">
+    Fast and suitable for English text. Uses regular expressions for noun phrase extraction.
+    
+    ```yaml settings.yaml
+    extract_graph_nlp:
+      enabled: true
+      # NLTK is used by default
+    ```
+  </Tab>
+  
+  <Tab title="spaCy semantic">
+    Uses spaCy's semantic parsing for more accurate extraction across multiple languages.
+    
+    ```yaml settings.yaml
+    extract_graph_nlp:
+      enabled: true
+      parser: spacy_semantic
+      spacy_model: en_core_web_md  # or any supported model
+    ```
+  </Tab>
+  
+  <Tab title="spaCy CFG">
+    Uses spaCy's context-free grammar parser for structured extraction.
+    
+    ```yaml settings.yaml
+    extract_graph_nlp:
+      enabled: true
+      parser: spacy_cfg
+      spacy_model: en_core_web_md
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+**SpaCy models requirement**
+
+This package requires SpaCy models to function correctly. If the required model is not installed, the package will automatically download and install it the first time it is used.
+
+You can install it manually by running:
+```bash
+python -m spacy download <model_name>
+# Example:
+python -m spacy download en_core_web_md
+```
+</Warning>
+
+### Recommended chunk size
+
+For FastGraphRAG, it's recommended to configure text chunking to produce much smaller chunks (50-100 tokens). This results in a better co-occurrence graph.
+
+```yaml settings.yaml
+chunks:
+  size: 75  # Smaller chunks for FastGraphRAG
+  overlap: 10
+```
+
+## Choosing a method
+
+Use this comparison table to decide which method is right for your use case:
+
+<CardGroup cols={2}>
+  <Card title="Standard GraphRAG" icon="star">
+    **Best for:**
+    - High-fidelity entity descriptions
+    - Graph exploration and analysis
+    - Rich semantic relationships
+    - Production-quality knowledge graphs
+    
+    **Trade-offs:**
+    - Higher LLM costs (~75% of total indexing cost)
+    - Slower processing time
+    - Requires more tokens
+  </Card>
+  
+  <Card title="FastGraphRAG" icon="bolt">
+    **Best for:**
+    - Summary questions using global search
+    - Cost-sensitive applications
+    - Large-scale datasets
+    - Rapid prototyping
+    
+    **Trade-offs:**
+    - Less directly relevant graph outside GraphRAG
+    - Noisier graph structure
+    - Entity descriptions are source text
+  </Card>
+</CardGroup>
+
+## Performance comparison
+
+<Note>
+Graph extraction constitutes roughly **75%** of indexing cost. FastGraphRAG is therefore much cheaper, but the tradeoff is that the extracted graph is less directly relevant for use outside of GraphRAG.
+</Note>
+
+### Cost estimation
+
+| Method | LLM API Calls | Relative Cost | Processing Time |
+|--------|---------------|---------------|------------------|
+| Standard | High | 100% | Slower |
+| Fast | Low | ~25% | Faster |
+
+### Quality comparison
+
+| Aspect | Standard | Fast |
+|--------|----------|------|
+| Entity descriptions | Rich, LLM-generated | Source text only |
+| Relationship descriptions | Rich, LLM-generated | Co-occurrence based |
+| Graph quality | High fidelity | Noisier |
+| Community reports | Description-based | Text-based |
+| Graph exploration | Excellent | Good |
+| Global search quality | Excellent | Excellent |
+
+## Recommendations
+
+<Accordion title="When to use Standard GraphRAG">
+  Choose Standard GraphRAG if:
+  
+  - You need high-fidelity entities and relationships
+  - Graph exploration is important to your use case
+  - You want to use the graph outside of GraphRAG queries
+  - You're building a production knowledge base
+  - Cost is not the primary concern
+</Accordion>
+
+<Accordion title="When to use FastGraphRAG">
+  Choose FastGraphRAG if:
+  
+  - Your primary use case is summary questions using global search
+  - You're working with large-scale datasets
+  - You need to minimize LLM costs
+  - You're prototyping or experimenting
+  - Processing speed is critical
+</Accordion>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Data flow" icon="arrow-right-arrow-left" href="/indexing/dataflow">
+    Learn how data flows through each method
+  </Card>
+  
+  <Card title="Configuration" icon="gear" href="/configuration/overview">
+    Configure your chosen indexing method
+  </Card>
+  
+  <Card title="Outputs" icon="table" href="/indexing/outputs">
+    Understand the output schemas
+  </Card>
+</CardGroup>

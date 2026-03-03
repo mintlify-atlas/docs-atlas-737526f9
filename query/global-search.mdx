@@ -1,0 +1,305 @@
+---
+title: Global search
+description: Understand how global search enables whole-dataset reasoning in GraphRAG
+icon: globe
+---
+
+Global search generates answers by searching over all AI-generated community reports in a map-reduce fashion. This method excels at questions requiring an understanding of the dataset as a whole.
+
+## Overview
+
+Baseline RAG struggles with queries that require aggregation of information across the dataset. Queries such as "What are the top 5 themes in the data?" perform poorly because baseline RAG relies on vector search of semantically similar text content, with nothing in the query to direct it to the correct information.
+
+<Info>
+GraphRAG's global search solves this by leveraging the structure of the LLM-generated knowledge graph, which reveals the dataset's structure and themes. The dataset is organized into meaningful semantic clusters that are pre-summarized.
+</Info>
+
+## How it works
+
+Global search operates in two stages: **map** and **reduce**.
+
+### Map stage
+
+Given a user query and optional conversation history, global search uses LLM-generated community reports from a specified level of the graph's community hierarchy as context data.
+
+1. **Segmentation**: Community reports are divided into text chunks of pre-defined size
+2. **Shuffling**: Reports are randomly shuffled and distributed across batches
+3. **Parallel processing**: Each batch generates an intermediate response
+4. **Rating**: Each point in the intermediate responses receives a numerical importance rating
+
+### Reduce stage
+
+The reduce stage aggregates and refines the intermediate responses:
+
+1. **Filtering**: Points are filtered based on importance scores (score > 0)
+2. **Ranking**: Remaining points are sorted by descending importance
+3. **Selection**: Top-ranked points are selected within the token budget
+4. **Aggregation**: Selected points are combined to generate the final response
+
+```mermaid
+---
+title: Global search dataflow
+---
+%%{ init: { 'flowchart': { 'curve': 'step' } } }%%
+flowchart LR
+    uq[User Query] --- .1
+    ch1[Conversation History] --- .1
+
+    subgraph RIR
+        direction TB
+        ri1[Rated Intermediate<br/>Response 1]~~~ri2[Rated Intermediate<br/>Response 2] -.\{1..N\}.-rin[Rated Intermediate<br/>Response N]
+    end
+
+    .1--Shuffled Community<br/>Report Batch 1-->RIR
+    .1--Shuffled Community<br/>Report Batch 2-->RIR---.2
+    .1--Shuffled Community<br/>Report Batch N-->RIR
+
+    .2--Ranking +<br/>Filtering-->agr[Aggregated Intermediate<br/>Responses]-->res[Response]
+
+    classDef turquoise fill:#19CCD3,stroke:#333,stroke-width:2px,color:#fff;
+    classDef rose fill:#DD8694,stroke:#333,stroke-width:2px,color:#fff;
+    classDef orange fill:#F19914,stroke:#333,stroke-width:2px,color:#fff;
+    classDef purple fill:#B356CD,stroke:#333,stroke-width:2px,color:#fff;
+    classDef invisible fill:#fff,stroke:#fff,stroke-width:0px,color:#fff;
+    class uq,ch1 turquoise;
+    class ri1,ri2,rin rose;
+    class agr orange;
+    class res purple;
+    class .1,.2 invisible;
+```
+
+## Configuration
+
+The `GlobalSearch` class accepts the following key parameters:
+
+<ParamField path="model" type="LLMCompletion" required>
+  Language model chat completion object for response generation
+</ParamField>
+
+<ParamField path="context_builder" type="GlobalContextBuilder" required>
+  Context builder object for preparing context data from community reports
+</ParamField>
+
+<ParamField path="map_system_prompt" type="str">
+  Prompt template for the map stage. Default: `MAP_SYSTEM_PROMPT`
+</ParamField>
+
+<ParamField path="reduce_system_prompt" type="str">
+  Prompt template for the reduce stage. Default: `REDUCE_SYSTEM_PROMPT`
+</ParamField>
+
+<ParamField path="response_type" type="str" default="multiple paragraphs">
+  Free-form text describing the desired response format (e.g., "Multiple Paragraphs", "Multi-Page Report")
+</ParamField>
+
+<ParamField path="allow_general_knowledge" type="bool" default="false">
+  If `true`, prompts the LLM to incorporate relevant real-world knowledge outside the dataset. May increase hallucinations but useful for certain scenarios.
+</ParamField>
+
+<ParamField path="general_knowledge_inclusion_prompt" type="str">
+  Instruction added to the reduce prompt when `allow_general_knowledge` is enabled. Default: `GENERAL_KNOWLEDGE_INSTRUCTION`
+</ParamField>
+
+<ParamField path="max_data_tokens" type="int" default="8000">
+  Token budget for context data
+</ParamField>
+
+<ParamField path="map_llm_params" type="dict">
+  Additional parameters (e.g., temperature, max_tokens) for the LLM call at the map stage
+</ParamField>
+
+<ParamField path="reduce_llm_params" type="dict">
+  Additional parameters (e.g., temperature, max_tokens) for the LLM call at the reduce stage
+</ParamField>
+
+<ParamField path="context_builder_params" type="dict">
+  Additional parameters passed to the context builder when building the context window for the map stage
+</ParamField>
+
+<ParamField path="concurrent_coroutines" type="int" default="32">
+  Controls the degree of parallelism in the map stage
+</ParamField>
+
+<ParamField path="callbacks" type="list[QueryCallbacks]">
+  Optional callback functions for custom event handlers during LLM completion streaming
+</ParamField>
+
+## API usage
+
+### Basic usage
+
+```python
+from graphrag.api import global_search
+from graphrag.config import GraphRagConfig
+import pandas as pd
+
+# Load your configuration
+config = GraphRagConfig.from_file("settings.yaml")
+
+# Load your indexed data
+entities = pd.read_parquet("output/entities.parquet")
+communities = pd.read_parquet("output/communities.parquet")
+community_reports = pd.read_parquet("output/community_reports.parquet")
+
+# Perform global search
+response, context = await global_search(
+    config=config,
+    entities=entities,
+    communities=communities,
+    community_reports=community_reports,
+    community_level=2,  # Level in community hierarchy
+    dynamic_community_selection=False,
+    response_type="Multiple Paragraphs",
+    query="What are the main themes in this dataset?"
+)
+
+print(response)
+```
+
+### Streaming usage
+
+```python
+from graphrag.api import global_search_streaming
+
+# Stream the response
+async for chunk in global_search_streaming(
+    config=config,
+    entities=entities,
+    communities=communities,
+    community_reports=community_reports,
+    community_level=2,
+    dynamic_community_selection=False,
+    response_type="Multiple Paragraphs",
+    query="What are the main themes in this dataset?"
+):
+    print(chunk, end="", flush=True)
+```
+
+### Dynamic community selection
+
+```python
+# Use dynamic community selection with a max level cap
+response, context = await global_search(
+    config=config,
+    entities=entities,
+    communities=communities,
+    community_reports=community_reports,
+    community_level=3,  # Max level cap
+    dynamic_community_selection=True,  # Enable dynamic selection
+    response_type="Multi-Page Report",
+    query="Provide a comprehensive analysis of the dataset"
+)
+```
+
+## Performance considerations
+
+<Warning>
+Global search is resource-intensive. The quality and cost of responses are heavily influenced by the community hierarchy level.
+</Warning>
+
+### Community hierarchy level
+
+The `community_level` parameter significantly impacts search performance:
+
+- **Lower levels** (closer to leaf nodes): More detailed reports, higher quality responses, but increased time and LLM resource usage
+- **Higher levels** (closer to root): Broader summaries, faster responses, but potentially less detailed
+
+### Token budget optimization
+
+Adjust `max_data_tokens` to balance quality and cost:
+
+```python
+# Higher token budget for comprehensive answers
+config.max_data_tokens = 12000  # More context, higher cost
+
+# Lower token budget for faster, cheaper searches
+config.max_data_tokens = 5000   # Less context, lower cost
+```
+
+### Parallelism tuning
+
+Control parallel processing with `concurrent_coroutines`:
+
+```python
+# Increase for faster processing (if API rate limits allow)
+search = GlobalSearch(
+    # ... other params
+    concurrent_coroutines=64  # Double default
+)
+
+# Decrease to avoid rate limits
+search = GlobalSearch(
+    # ... other params
+    concurrent_coroutines=16  # Half default
+)
+```
+
+## Best practices
+
+<Steps>
+  <Step title="Choose the right community level">
+    Start with level 2 and adjust based on your dataset size and query complexity
+  </Step>
+  
+  <Step title="Use dynamic community selection for complex queries">
+    Enable `dynamic_community_selection=True` for queries requiring variable depth
+  </Step>
+  
+  <Step title="Customize response types">
+    Specify clear response formats: "Single Paragraph", "Multiple Paragraphs", "Multi-Page Report", "List of 5-10 Items"
+  </Step>
+  
+  <Step title="Monitor token usage">
+    Track `prompt_tokens` and `output_tokens` in the response to optimize costs
+  </Step>
+</Steps>
+
+## Examples
+
+### Thematic analysis
+
+```python
+response, context = await global_search(
+    config=config,
+    entities=entities,
+    communities=communities,
+    community_reports=community_reports,
+    community_level=2,
+    dynamic_community_selection=False,
+    response_type="List of 10 Items",
+    query="What are the top 10 themes discussed in this dataset?"
+)
+```
+
+### Comprehensive report generation
+
+```python
+response, context = await global_search(
+    config=config,
+    entities=entities,
+    communities=communities,
+    community_reports=community_reports,
+    community_level=1,
+    dynamic_community_selection=True,
+    response_type="Multi-Page Report",
+    query="Generate a comprehensive report on the key findings in this dataset",
+    callbacks=[custom_callback]  # Track progress
+)
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Local search" icon="location-dot" href="/query/local-search">
+    Learn about entity-based search
+  </Card>
+  <Card title="DRIFT search" icon="compass" href="/query/drift-search">
+    Explore hybrid search methods
+  </Card>
+  <Card title="Example notebooks" icon="book-open" href="/examples/notebooks/global-search">
+    See global search in action
+  </Card>
+  <Card title="Configuration" icon="gear" href="/query/overview">
+    Configure global search settings
+  </Card>
+</CardGroup>

@@ -1,0 +1,441 @@
+---
+title: LLM models
+description: Configure language models for GraphRAG indexing and queries
+---
+
+GraphRAG uses language models for various tasks including entity extraction, summarization, and query responses. This page covers how to configure and customize your language models.
+
+## Model support
+
+GraphRAG uses [LiteLLM](https://docs.litellm.ai/) to support 100+ language models from various providers. This includes:
+
+- OpenAI (GPT-4, GPT-4 Turbo, GPT-4o, o1)
+- Azure OpenAI
+- Anthropic (Claude)
+- Google (Gemini)
+- AWS Bedrock
+- Local models via Ollama or LiteLLM Proxy
+
+<Note>
+GraphRAG has been most thoroughly tested with OpenAI's GPT-4 series models. Other models are supported but may require additional prompt tuning.
+</Note>
+
+## Basic configuration
+
+### OpenAI models
+
+The default configuration uses OpenAI models:
+
+```yaml
+completion_models:
+  default_completion_model:
+    model_provider: openai
+    model: gpt-4.1
+    auth_method: api_key
+    api_key: ${GRAPHRAG_API_KEY}
+
+embedding_models:
+  default_embedding_model:
+    model_provider: openai
+    model: text-embedding-3-large
+    auth_method: api_key
+    api_key: ${GRAPHRAG_API_KEY}
+```
+
+### Azure OpenAI
+
+For Azure-hosted models:
+
+```yaml
+completion_models:
+  default_completion_model:
+    model_provider: azure
+    model: gpt-4
+    auth_method: api_key
+    api_key: ${AZURE_OPENAI_API_KEY}
+    api_base: https://your-resource.openai.azure.com/
+    api_version: "2024-02-15-preview"
+    azure_deployment_name: gpt-4-deployment
+```
+
+<Tip>
+If your Azure deployment name matches the model name, you can omit `azure_deployment_name`.
+</Tip>
+
+### Azure Managed Identity
+
+For production environments using managed identity:
+
+```yaml
+completion_models:
+  default_completion_model:
+    model_provider: azure
+    model: gpt-4
+    auth_method: azure_managed_identity
+    api_base: https://your-resource.openai.azure.com/
+    api_version: "2024-02-15-preview"
+```
+
+### Other providers
+
+Configure other providers using LiteLLM's format:
+
+```yaml
+completion_models:
+  gemini_model:
+    model_provider: gemini
+    model: gemini-2.5-flash-lite
+    auth_method: api_key
+    api_key: ${GEMINI_API_KEY}
+
+embedding_models:
+  gemini_embedding:
+    model_provider: gemini
+    model: gemini-embedding-001
+    auth_method: api_key
+    api_key: ${GEMINI_API_KEY}
+```
+
+<Info>
+See [LiteLLM's documentation](https://docs.litellm.ai/docs/#basic-usage) for provider-specific configuration. The `model_provider` is the prefix before `/` and `model` is the suffix after `/`.
+</Info>
+
+## Model configuration options
+
+### Required parameters
+
+<ParamField path="model_provider" type="string" required>
+  The model provider (e.g., `openai`, `azure`, `anthropic`, `gemini`)
+</ParamField>
+
+<ParamField path="model" type="string" required>
+  The specific model name (e.g., `gpt-4.1`, `claude-3-5-sonnet-20241022`)
+</ParamField>
+
+<ParamField path="auth_method" type="string" required>
+  Authentication method: `api_key` or `azure_managed_identity`
+</ParamField>
+
+### Optional parameters
+
+<ParamField path="type" type="string" default="litellm">
+  LLM provider type: `litellm` or `mock` (for testing)
+</ParamField>
+
+<ParamField path="api_key" type="string">
+  API key for authentication (use environment variables)
+</ParamField>
+
+<ParamField path="api_base" type="string">
+  Base URL for API requests (required for Azure and custom endpoints)
+</ParamField>
+
+<ParamField path="api_version" type="string">
+  API version (Azure only)
+</ParamField>
+
+<ParamField path="azure_deployment_name" type="string">
+  Azure deployment name if different from model name
+</ParamField>
+
+<ParamField path="call_args" type="object">
+  Default arguments sent with every request (e.g., `temperature`, `max_tokens`, `n`)
+</ParamField>
+
+### Call arguments
+
+Set default parameters for all model calls:
+
+```yaml
+completion_models:
+  default_completion_model:
+    model_provider: openai
+    model: gpt-4.1
+    auth_method: api_key
+    api_key: ${GRAPHRAG_API_KEY}
+    call_args:
+      temperature: 0.7
+      max_tokens: 2000
+      top_p: 0.95
+```
+
+## Retry configuration
+
+Configure automatic retry behavior for failed requests:
+
+```yaml
+completion_models:
+  default_completion_model:
+    model_provider: openai
+    model: gpt-4.1
+    auth_method: api_key
+    api_key: ${GRAPHRAG_API_KEY}
+    retry:
+      type: exponential_backoff
+      max_retries: 7
+      base_delay: 2.0
+      max_delay: 60.0
+      jitter: true
+```
+
+<ParamField path="retry.type" type="string" default="exponential_backoff">
+  Retry strategy: `exponential_backoff` or `immediate`
+</ParamField>
+
+<ParamField path="retry.max_retries" type="integer" default="7">
+  Maximum number of retry attempts
+</ParamField>
+
+<ParamField path="retry.base_delay" type="float" default="2.0">
+  Base delay in seconds for exponential backoff
+</ParamField>
+
+<ParamField path="retry.max_delay" type="float">
+  Maximum delay between retries (no limit if not specified)
+</ParamField>
+
+<ParamField path="retry.jitter" type="boolean" default="true">
+  Add random jitter to retry delays
+</ParamField>
+
+## Rate limiting
+
+Control request rate to avoid hitting API limits:
+
+```yaml
+completion_models:
+  default_completion_model:
+    model_provider: openai
+    model: gpt-4.1
+    auth_method: api_key
+    api_key: ${GRAPHRAG_API_KEY}
+    rate_limit:
+      type: sliding_window
+      period_in_seconds: 60
+      requests_per_period: 100
+      tokens_per_period: 150000
+```
+
+<ParamField path="rate_limit.type" type="string" default="sliding_window">
+  Rate limiting strategy (currently only `sliding_window` supported)
+</ParamField>
+
+<ParamField path="rate_limit.period_in_seconds" type="integer" default="60">
+  Time window for rate limiting in seconds
+</ParamField>
+
+<ParamField path="rate_limit.requests_per_period" type="integer">
+  Maximum requests per time window
+</ParamField>
+
+<ParamField path="rate_limit.tokens_per_period" type="integer">
+  Maximum tokens per time window
+</ParamField>
+
+## Metrics configuration
+
+Track model usage and performance:
+
+```yaml
+completion_models:
+  default_completion_model:
+    model_provider: openai
+    model: gpt-4.1
+    auth_method: api_key
+    api_key: ${GRAPHRAG_API_KEY}
+    metrics:
+      type: default
+      store: memory
+      writer: log  # or 'file'
+      log_level: 20  # INFO
+      base_dir: ./metrics  # for file writer
+```
+
+<ParamField path="metrics.writer" type="string" default="log">
+  Where to write metrics: `log` (console) or `file`
+</ParamField>
+
+<ParamField path="metrics.base_dir" type="string">
+  Directory for metrics files (when using `file` writer)
+</ParamField>
+
+## Multiple model configuration
+
+Define different models for different tasks:
+
+```yaml
+completion_models:
+  extraction_model:
+    model_provider: openai
+    model: gpt-4o
+    auth_method: api_key
+    api_key: ${GRAPHRAG_API_KEY}
+  
+  query_model:
+    model_provider: openai
+    model: o1
+    auth_method: api_key
+    api_key: ${GRAPHRAG_API_KEY}
+  
+  budget_model:
+    model_provider: openai
+    model: gpt-4o-mini
+    auth_method: api_key
+    api_key: ${GRAPHRAG_API_KEY}
+
+embedding_models:
+  default_embedding_model:
+    model_provider: openai
+    model: text-embedding-3-large
+    auth_method: api_key
+    api_key: ${GRAPHRAG_API_KEY}
+
+# Reference models in workflows
+extract_graph:
+  completion_model_id: extraction_model
+  prompt: "prompts/extract_graph.txt"
+  entity_types: [organization, person, geo, event]
+  max_gleanings: 1
+
+summarize_descriptions:
+  completion_model_id: budget_model
+  prompt: "prompts/summarize_descriptions.txt"
+  max_length: 500
+
+community_reports:
+  completion_model_id: extraction_model
+  graph_prompt: "prompts/community_report_graph.txt"
+  max_length: 2000
+
+global_search:
+  completion_model_id: query_model
+  map_prompt: "prompts/global_search_map_system_prompt.txt"
+  reduce_prompt: "prompts/global_search_reduce_system_prompt.txt"
+```
+
+<Tip>
+Use different models to optimize cost vs. quality tradeoffs. For example:
+- High-end models (GPT-4o, o1) for critical extraction and queries
+- Mid-tier models (GPT-4o-mini) for summarization
+- Budget models for less critical tasks
+</Tip>
+
+## Model selection considerations
+
+### GPT-4 series (recommended)
+
+GraphRAG has been thoroughly tested with:
+- `gpt-4` - Original GPT-4 model
+- `gpt-4-turbo` - Faster GPT-4 with larger context
+- `gpt-4o` - Optimized multimodal model
+- `gpt-4o-mini` - Smaller, faster, more affordable
+
+### o-series models (reasoning)
+
+The o-series models include built-in reasoning:
+- `o1` - Advanced reasoning model
+- `o1-mini` - Smaller reasoning model
+
+<Warning>
+o-series models have different parameters:
+- Use `max_completion_tokens` instead of `max_tokens`
+- Reasoning tokens count toward usage but are separate from output
+- Slower and more expensive than standard models
+- May require prompt adjustments (less explicit chain-of-thought)
+</Warning>
+
+### Structured output requirements
+
+<Info>
+Your chosen model must support [structured outputs](https://openai.com/index/introducing-structured-outputs-in-the-api/) with JSON schema validation. Most modern models support this, but verify before using custom models.
+</Info>
+
+## Using custom models
+
+### Via proxy servers
+
+Use Ollama or LiteLLM Proxy to connect unsupported models:
+
+```yaml
+completion_models:
+  local_model:
+    model_provider: openai  # Use OpenAI-compatible endpoint
+    model: llama3
+    auth_method: api_key
+    api_key: not-needed
+    api_base: http://localhost:11434/v1  # Ollama endpoint
+```
+
+<Warning>
+Custom models may produce malformed JSON responses. Your proxy may need to:
+- Validate and fix JSON formatting
+- Handle schema validation errors
+- Ensure structured output compliance
+</Warning>
+
+### Via model protocol (library usage)
+
+For programmatic use, implement the model protocol:
+
+```python
+from graphrag_llm.completion import LLMCompletion, register_completion
+
+class MyCustomCompletionModel(LLMCompletion):
+    # Implement required methods
+    async def complete(self, prompt: str, **kwargs):
+        # Your implementation
+        pass
+
+# Register your model
+register_completion("my-custom-model", MyCustomCompletionModel)
+```
+
+Then reference it in config:
+
+```yaml
+completion_models:
+  custom_model:
+    type: my-custom-model
+    # Additional config passed to your implementation
+```
+
+<Info>
+Custom model implementations are only supported when using GraphRAG as a Python library, not via the CLI.
+</Info>
+
+## Best practices
+
+<Steps>
+  <Step title="Start with defaults">
+    Begin with GPT-4o or GPT-4o-mini for reliable results
+  </Step>
+  <Step title="Configure retry and rate limiting">
+    Set appropriate retry logic and rate limits to handle API issues
+  </Step>
+  <Step title="Use environment variables">
+    Never hardcode API keys - use `.env` files and `${VAR}` substitution
+  </Step>
+  <Step title="Monitor costs">
+    Enable metrics to track token usage and optimize model selection
+  </Step>
+  <Step title="Test before production">
+    Validate model performance on sample data before full indexing
+  </Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Settings reference" icon="book" href="/configuration/settings">
+    Complete configuration options
+  </Card>
+  <Card title="Storage" icon="database" href="/configuration/storage">
+    Configure storage and caching
+  </Card>
+  <Card title="Prompt tuning" icon="wand-magic-sparkles" href="/prompt-tuning/overview">
+    Optimize prompts for your models
+  </Card>
+  <Card title="Start indexing" icon="play" href="/indexing/overview">
+    Begin processing documents
+  </Card>
+</CardGroup>

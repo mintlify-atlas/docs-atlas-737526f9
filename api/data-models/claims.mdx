@@ -1,0 +1,152 @@
+---
+title: Claims
+description: Covariate data model for claims and metadata associated with entities
+---
+
+## Overview
+
+The `Covariate` class represents metadata associated with subjects in the knowledge graph. While the class is named "Covariate" in the codebase, it is commonly used to represent **claims** - specific factual statements or assertions about entities extracted from the text.
+
+Covariates are flexible metadata containers where each subject (e.g., an entity) may be associated with multiple types of covariates. The most common use case is entity claims, which are factual statements about entities.
+
+Covariates inherit from the `Identified` base class, which provides `id` and `short_id` fields.
+
+## Schema
+
+### Core fields
+
+<ResponseField name="id" type="string" required>
+  Unique identifier for the covariate/claim.
+</ResponseField>
+
+<ResponseField name="short_id" type="string | null">
+  Human-readable ID used to refer to this covariate in prompts or texts displayed to users.
+</ResponseField>
+
+<ResponseField name="subject_id" type="string" required>
+  The ID of the subject this covariate is associated with. Typically an entity ID.
+</ResponseField>
+
+<ResponseField name="subject_type" type="string" default="entity">
+  The type of the subject. Defaults to "entity" but can represent other subject types.
+</ResponseField>
+
+<ResponseField name="covariate_type" type="string" default="claim">
+  The type of covariate. Defaults to "claim" for factual assertions, but can represent other metadata types.
+</ResponseField>
+
+### Relationships
+
+<ResponseField name="text_unit_ids" type="string[]">
+  List of text unit IDs in which the covariate information appears. Links the claim back to its source text chunks.
+</ResponseField>
+
+### Metadata
+
+<ResponseField name="attributes" type="object">
+  Additional attributes containing the actual claim content and metadata. For claims, this typically includes fields like:
+  - `description`: The claim text
+  - `status`: Verification status
+  - `start_date` / `end_date`: Temporal validity
+  - `source_text`: Original text snippet
+  - Any custom metadata fields
+</ResponseField>
+
+## Example
+
+```json
+{
+  "id": "cov1234567-89ab-cdef-0123-456789abcdef",
+  "short_id": "0",
+  "subject_id": "e1234567-89ab-cdef-0123-456789abcdef",
+  "subject_type": "entity",
+  "covariate_type": "claim",
+  "text_unit_ids": ["t1", "t2"],
+  "attributes": {
+    "description": "Microsoft was founded in 1975",
+    "status": "verified",
+    "start_date": "1975-04-04",
+    "source_text": "Bill Gates and Paul Allen founded Microsoft on April 4, 1975",
+    "confidence": 0.95
+  }
+}
+```
+
+## Creating from dictionary
+
+The `Covariate` class provides a `from_dict()` class method to create instances from dictionary data:
+
+```python
+claim = Covariate.from_dict({
+    "id": "cov1234567-89ab-cdef-0123-456789abcdef",
+    "subject_id": "e1234567-89ab-cdef-0123-456789abcdef",
+    "covariate_type": "claim",
+    "text_unit_ids": ["t1", "t2"],
+    "attributes": {
+        "description": "Microsoft was founded in 1975",
+        "status": "verified"
+    }
+})
+```
+
+<Expandable title="Custom key mapping">
+  The `from_dict()` method accepts custom key names for flexible data import:
+  
+  - `id_key`: Key for the covariate ID (default: "id")
+  - `subject_id_key`: Key for the subject ID (default: "subject_id")
+  - `covariate_type_key`: Key for the covariate type (default: "covariate_type")
+  - `short_id_key`: Key for the human-readable ID (default: "human_readable_id")
+  - `text_unit_ids_key`: Key for text unit IDs (default: "text_unit_ids")
+  - `attributes_key`: Key for additional attributes (default: "attributes")
+</Expandable>
+
+## Common claim attributes
+
+When using covariates as claims, the `attributes` dictionary typically contains:
+
+<ResponseField name="attributes.description" type="string">
+  The actual claim text - a factual statement about the subject.
+</ResponseField>
+
+<ResponseField name="attributes.status" type="string">
+  Verification status of the claim (e.g., "verified", "disputed", "unverified").
+</ResponseField>
+
+<ResponseField name="attributes.start_date" type="string">
+  When the claim became true or valid.
+</ResponseField>
+
+<ResponseField name="attributes.end_date" type="string">
+  When the claim ceased to be true or valid (if applicable).
+</ResponseField>
+
+<ResponseField name="attributes.source_text" type="string">
+  The original text snippet from which the claim was extracted.
+</ResponseField>
+
+<ResponseField name="attributes.confidence" type="float">
+  Confidence score for the claim extraction (0.0 to 1.0).
+</ResponseField>
+
+## Use cases
+
+- **Fact extraction**: Store specific facts and assertions about entities
+- **Temporal tracking**: Track time-sensitive information with start/end dates
+- **Source attribution**: Link claims back to original text via text_unit_ids
+- **Metadata enrichment**: Add structured metadata to entities beyond basic descriptions
+- **Claim verification**: Store and track verification status of extracted facts
+
+## Multiple covariate types
+
+While "claim" is the default and most common covariate type, the system supports multiple types of covariates per subject. This allows you to organize different kinds of metadata separately:
+
+```json
+{
+  "covariate_type": "claim",
+  "attributes": {"description": "Founded in 1975"}
+},
+{
+  "covariate_type": "metric",
+  "attributes": {"revenue": "198B", "year": "2023"}
+}
+```

@@ -1,80 +1,268 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get up and running with GraphRAG in minutes
 ---
 
-## Get started in three steps
+<Warning>
+GraphRAG can consume significant LLM resources. Start with the tutorial dataset until you understand the system, and experiment with fast/inexpensive models before committing to large indexing jobs.
+</Warning>
 
-Get your documentation site running locally and make your first customization.
+Get GraphRAG running in 5 steps: install, initialize, configure, index, and query.
 
-### Step 1: Set up your local environment
+## Prerequisites
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+- Python 3.11-3.13
+- OpenAI API key or Azure OpenAI credentials
 
-### Step 2: Deploy your changes
+## Step 1: Install GraphRAG
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+<Steps>
+  <Step title="Create a project directory">
+    ```bash
+    mkdir graphrag_quickstart
+    cd graphrag_quickstart
+    python -m venv .venv
+    ```
+  </Step>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+  <Step title="Activate your virtual environment">
+    <CodeGroup>
+      ```bash Unix/MacOS
+      source .venv/bin/activate
+      ```
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+      ```bash Windows PowerShell
+      .venv\Scripts\activate
+      ```
 
-### Step 3: Go live
+      ```bash Windows CMD
+      .venv\Scripts\activate.bat
+      ```
+    </CodeGroup>
+  </Step>
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+  <Step title="Install the package">
+    ```bash
+    pip install graphrag
+    ```
+  </Step>
+</Steps>
+
+## Step 2: Initialize your workspace
+
+Initialize GraphRAG to create the necessary configuration files:
+
+```bash
+graphrag init
+```
+
+When prompted, specify your preferred models:
+- **Chat model**: `gpt-4.1` (default) or `gpt-4-turbo`
+- **Embedding model**: `text-embedding-3-large` (default)
+
+This creates:
+- `settings.yaml` - Main configuration file
+- `.env` - Environment variables (API keys)
+- `input/` - Directory for source documents
+- `prompts/` - Customizable extraction prompts
+
+## Step 3: Configure your API key
+
+<Tabs>
+  <Tab title="OpenAI">
+    Edit `.env` and add your OpenAI API key:
+
+    ```bash
+    GRAPHRAG_API_KEY=sk-...
+    ```
+  </Tab>
+
+  <Tab title="Azure OpenAI">
+    Edit `.env` and add your Azure OpenAI API key:
+
+    ```bash
+    GRAPHRAG_API_KEY=your-azure-api-key
+    ```
+
+    Then update `settings.yaml` with your Azure configuration:
+
+    ```yaml
+    models:
+      completions:
+        type: chat
+        model_provider: azure
+        model: gpt-4.1
+        deployment_name: your-deployment-name
+        api_base: https://your-instance.openai.azure.com
+        api_version: 2024-02-15-preview
+        
+      embeddings:
+        type: embedding
+        model_provider: azure
+        model: text-embedding-3-large
+        deployment_name: your-embedding-deployment
+        api_base: https://your-instance.openai.azure.com
+        api_version: 2024-02-15-preview
+    ```
+  </Tab>
+</Tabs>
+
+## Step 4: Add your data
+
+Download the sample dataset (A Christmas Carol):
+
+```bash
+curl https://www.gutenberg.org/cache/epub/24022/pg24022.txt -o ./input/book.txt
+```
+
+Or add your own documents to the `input/` directory. Supported formats:
+- `.txt` files
+- `.csv` files (with text column)
+- `.json` files (with text field)
+
+## Step 5: Run the indexing pipeline
+
+Build your knowledge graph index:
+
+```bash
+graphrag index
+```
+
+This process:
+1. Chunks your documents into text units
+2. Extracts entities, relationships, and claims
+3. Builds a knowledge graph
+4. Detects hierarchical communities
+5. Generates community summaries
+6. Creates vector embeddings
+
+<Info>
+Indexing typically takes 5-15 minutes for the sample dataset with GPT-4. Cost: approximately $0.50-$2.00 depending on the model and dataset size.
+</Info>
+
+The output is saved to `output/` as parquet files.
+
+## Step 6: Query your knowledge graph
+
+Now you can ask questions about your data using different search methods:
+
+<Tabs>
+  <Tab title="Global search">
+    Best for questions about the entire dataset:
+
+    ```bash
+    graphrag query "What are the main themes in this story?"
+    ```
+  </Tab>
+
+  <Tab title="Local search">
+    Best for specific entity-focused questions:
+
+    ```bash
+    graphrag query "Who is Scrooge and what are his main relationships?" --method local
+    ```
+  </Tab>
+
+  <Tab title="DRIFT search">
+    Best for questions needing both entity details and community context:
+
+    ```bash
+    graphrag query "How does Scrooge's character develop throughout the story?" --method drift
+    ```
+  </Tab>
+</Tabs>
+
+## Understanding the search methods
+
+<CardGroup cols={3}>
+  <Card title="Global search" icon="globe">
+    **Best for**: Holistic dataset understanding
+
+    Uses all community summaries in a map-reduce process. Ideal for "what are the main themes" type questions.
+  </Card>
+
+  <Card title="Local search" icon="location-dot">
+    **Best for**: Entity-specific questions
+
+    Retrieves entities and their neighbors. Ideal for "who is X" or "what does Y do" questions.
+  </Card>
+
+  <Card title="DRIFT search" icon="diagram-project">
+    **Best for**: Multi-level reasoning
+
+    Combines local entity retrieval with community context. Ideal for complex questions requiring both depth and breadth.
+  </Card>
+</CardGroup>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/configuration/overview">
+    Customize indexing, chunking, and model settings
+  </Card>
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+  <Card title="Prompt tuning" icon="wand-magic-sparkles" href="/prompt-tuning/overview">
+    Generate domain-specific prompts for better extraction
+  </Card>
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+  <Card title="Query engine" icon="magnifying-glass" href="/query/overview">
+    Learn about all four search methods in depth
+  </Card>
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Python API" icon="code" href="/guides/python-api">
+    Use GraphRAG programmatically in your applications
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Rate limit errors">
+    If you hit rate limits:
+    
+    1. Reduce parallelization in `settings.yaml`:
+       ```yaml
+       parallelization:
+         concurrent_requests: 5  # Reduce from default 25
+       ```
+    
+    2. Add delays between requests:
+       ```yaml
+       concurrent_requests: 5
+       rate_limit_per_minute: 300
+       ```
+  </Accordion>
+
+  <Accordion title="High costs">
+    To reduce indexing costs:
+    
+    1. Use `gpt-3.5-turbo` for initial testing
+    2. Enable caching to avoid re-processing:
+       ```yaml
+       cache:
+         type: file
+       ```
+    3. Use the "fast" indexing method:
+       ```bash
+       graphrag index --method fast
+       ```
+  </Accordion>
+
+  <Accordion title="Out of memory errors">
+    For large datasets:
+    
+    1. Increase chunk overlap to reduce total chunks
+    2. Reduce `max_cluster_size` in settings
+    3. Process documents in batches
+  </Accordion>
+
+  <Accordion title="Poor extraction quality">
+    Improve extraction with prompt tuning:
+    
+    ```bash
+    graphrag prompt-tune
+    ```
+    
+    This auto-generates prompts optimized for your domain and data.
+  </Accordion>
+</AccordionGroup>

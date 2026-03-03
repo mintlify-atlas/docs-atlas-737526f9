@@ -1,0 +1,795 @@
+---
+title: Configuration defaults
+description: Default values for all GraphRAG configuration options
+---
+
+GraphRAG provides sensible defaults for all configuration options. This reference documents all default values.
+
+## Model defaults
+
+### Completion models
+
+<ParamField path="DEFAULT_COMPLETION_MODEL_ID" type="str" default="default_completion_model">
+  Default identifier for completion model configurations.
+</ParamField>
+
+<ParamField path="DEFAULT_COMPLETION_MODEL" type="str" default="gpt-4.1">
+  Default completion model name.
+</ParamField>
+
+<ParamField path="DEFAULT_COMPLETION_MODEL_AUTH_TYPE" type="AuthMethod" default="ApiKey">
+  Default authentication method for completion models.
+</ParamField>
+
+<ParamField path="DEFAULT_MODEL_PROVIDER" type="str" default="openai">
+  Default model provider.
+</ParamField>
+
+### Embedding models
+
+<ParamField path="DEFAULT_EMBEDDING_MODEL_ID" type="str" default="default_embedding_model">
+  Default identifier for embedding model configurations.
+</ParamField>
+
+<ParamField path="DEFAULT_EMBEDDING_MODEL" type="str" default="text-embedding-3-large">
+  Default embedding model name.
+</ParamField>
+
+<ParamField path="DEFAULT_EMBEDDING_MODEL_AUTH_TYPE" type="AuthMethod" default="ApiKey">
+  Default authentication method for embedding models.
+</ParamField>
+
+### Encoding
+
+<ParamField path="ENCODING_MODEL" type="str" default="o200k_base">
+  Default encoding model for tokenization.
+</ParamField>
+
+## Directory defaults
+
+<ParamField path="DEFAULT_INPUT_BASE_DIR" type="str" default="input">
+  Default base directory for input files.
+</ParamField>
+
+<ParamField path="DEFAULT_OUTPUT_BASE_DIR" type="str" default="output">
+  Default base directory for output files.
+</ParamField>
+
+<ParamField path="DEFAULT_CACHE_BASE_DIR" type="str" default="cache">
+  Default base directory for cache storage.
+</ParamField>
+
+<ParamField path="DEFAULT_UPDATE_OUTPUT_BASE_DIR" type="str" default="update_output">
+  Default base directory for incremental update output.
+</ParamField>
+
+## Entity types
+
+<ParamField path="DEFAULT_ENTITY_TYPES" type="list[str]" default='["organization", "person", "geo", "event"]'>
+  Default entity types to extract during graph construction.
+</ParamField>
+
+## Configuration class defaults
+
+The following sections document default values for each configuration class.
+
+### BasicSearchDefaults
+
+<ParamField path="prompt" type="None" default="None">
+  Basic search prompt template.
+</ParamField>
+
+<ParamField path="k" type="int" default="10">
+  Number of results to return.
+</ParamField>
+
+<ParamField path="max_context_tokens" type="int" default="12000">
+  Maximum context tokens.
+</ParamField>
+
+<ParamField path="completion_model_id" type="str" default="default_completion_model">
+  Completion model ID.
+</ParamField>
+
+<ParamField path="embedding_model_id" type="str" default="default_embedding_model">
+  Embedding model ID.
+</ParamField>
+
+### ChunkingDefaults
+
+<ParamField path="type" type="str" default="tokens">
+  Chunking strategy type (from ChunkerType enum).
+</ParamField>
+
+<ParamField path="size" type="int" default="1200">
+  Chunk size in tokens.
+</ParamField>
+
+<ParamField path="overlap" type="int" default="100">
+  Overlap between chunks in tokens.
+</ParamField>
+
+<ParamField path="encoding_model" type="str" default="o200k_base">
+  Encoding model for tokenization.
+</ParamField>
+
+<ParamField path="prepend_metadata" type="None" default="None">
+  Metadata to prepend to chunks.
+</ParamField>
+
+### ClusterGraphDefaults
+
+<ParamField path="max_cluster_size" type="int" default="10">
+  Maximum size of clusters.
+</ParamField>
+
+<ParamField path="use_lcc" type="bool" default="True">
+  Whether to use the largest connected component.
+</ParamField>
+
+<ParamField path="seed" type="int" default="0xDEADBEEF">
+  Random seed for clustering (3735928559 in decimal).
+</ParamField>
+
+### CommunityReportDefaults
+
+<ParamField path="graph_prompt" type="None" default="None">
+  Prompt for graph-based community reports.
+</ParamField>
+
+<ParamField path="text_prompt" type="None" default="None">
+  Prompt for text-based community reports.
+</ParamField>
+
+<ParamField path="max_length" type="int" default="2000">
+  Maximum report length in tokens.
+</ParamField>
+
+<ParamField path="max_input_length" type="int" default="8000">
+  Maximum input length in tokens.
+</ParamField>
+
+<ParamField path="completion_model_id" type="str" default="default_completion_model">
+  Completion model ID.
+</ParamField>
+
+<ParamField path="model_instance_name" type="str" default="community_reporting">
+  Model instance name for caching.
+</ParamField>
+
+### DriftSearchDefaults
+
+<ParamField path="prompt" type="None" default="None">
+  DRIFT search prompt.
+</ParamField>
+
+<ParamField path="reduce_prompt" type="None" default="None">
+  Reduce step prompt.
+</ParamField>
+
+<ParamField path="data_max_tokens" type="int" default="12000">
+  Maximum data tokens.
+</ParamField>
+
+<ParamField path="reduce_max_tokens" type="None" default="None">
+  Maximum reduce tokens.
+</ParamField>
+
+<ParamField path="reduce_temperature" type="float" default="0">
+  Temperature for reduce step.
+</ParamField>
+
+<ParamField path="reduce_max_completion_tokens" type="None" default="None">
+  Maximum completion tokens for reduce.
+</ParamField>
+
+<ParamField path="concurrency" type="int" default="32">
+  Concurrency level for DRIFT operations.
+</ParamField>
+
+<ParamField path="drift_k_followups" type="int" default="20">
+  Number of followup queries.
+</ParamField>
+
+<ParamField path="primer_folds" type="int" default="5">
+  Number of primer folds.
+</ParamField>
+
+<ParamField path="primer_llm_max_tokens" type="int" default="12000">
+  Maximum tokens for primer LLM.
+</ParamField>
+
+<ParamField path="n_depth" type="int" default="3">
+  Search depth.
+</ParamField>
+
+<ParamField path="local_search_text_unit_prop" type="float" default="0.9">
+  Text unit proportion for local search component.
+</ParamField>
+
+<ParamField path="local_search_community_prop" type="float" default="0.1">
+  Community proportion for local search component.
+</ParamField>
+
+<ParamField path="local_search_top_k_mapped_entities" type="int" default="10">
+  Top k entities for local search.
+</ParamField>
+
+<ParamField path="local_search_top_k_relationships" type="int" default="10">
+  Top k relationships for local search.
+</ParamField>
+
+<ParamField path="local_search_max_data_tokens" type="int" default="12000">
+  Maximum data tokens for local search.
+</ParamField>
+
+<ParamField path="local_search_temperature" type="float" default="0">
+  Temperature for local search.
+</ParamField>
+
+<ParamField path="local_search_top_p" type="float" default="1">
+  Top p for local search.
+</ParamField>
+
+<ParamField path="local_search_n" type="int" default="1">
+  Number of completions for local search.
+</ParamField>
+
+<ParamField path="local_search_llm_max_gen_tokens" type="int | None" default="None">
+  Maximum generation tokens for local search.
+</ParamField>
+
+<ParamField path="local_search_llm_max_gen_completion_tokens" type="int | None" default="None">
+  Maximum completion tokens for local search.
+</ParamField>
+
+<ParamField path="completion_model_id" type="str" default="default_completion_model">
+  Completion model ID.
+</ParamField>
+
+<ParamField path="embedding_model_id" type="str" default="default_embedding_model">
+  Embedding model ID.
+</ParamField>
+
+### EmbedTextDefaults
+
+<ParamField path="embedding_model_id" type="str" default="default_embedding_model">
+  Embedding model ID.
+</ParamField>
+
+<ParamField path="model_instance_name" type="str" default="text_embedding">
+  Model instance name for caching.
+</ParamField>
+
+<ParamField path="batch_size" type="int" default="16">
+  Batch size for embedding operations.
+</ParamField>
+
+<ParamField path="batch_max_tokens" type="int" default="8191">
+  Maximum tokens per batch.
+</ParamField>
+
+<ParamField path="names" type="list[str]">
+  List of embeddings to generate (uses default_embeddings).
+</ParamField>
+
+### ExtractClaimsDefaults
+
+<ParamField path="enabled" type="bool" default="False">
+  Whether claim extraction is enabled.
+</ParamField>
+
+<ParamField path="prompt" type="None" default="None">
+  Claim extraction prompt.
+</ParamField>
+
+<ParamField path="description" type="str" default="Any claims or facts that could be relevant to information discovery.">
+  Description of claims to extract.
+</ParamField>
+
+<ParamField path="max_gleanings" type="int" default="1">
+  Maximum number of gleaning iterations.
+</ParamField>
+
+<ParamField path="completion_model_id" type="str" default="default_completion_model">
+  Completion model ID.
+</ParamField>
+
+<ParamField path="model_instance_name" type="str" default="extract_claims">
+  Model instance name for caching.
+</ParamField>
+
+### ExtractGraphDefaults
+
+<ParamField path="prompt" type="None" default="None">
+  Graph extraction prompt.
+</ParamField>
+
+<ParamField path="entity_types" type="list[str]" default='["organization", "person", "geo", "event"]'>
+  Entity types to extract.
+</ParamField>
+
+<ParamField path="max_gleanings" type="int" default="1">
+  Maximum number of gleaning iterations.
+</ParamField>
+
+<ParamField path="completion_model_id" type="str" default="default_completion_model">
+  Completion model ID.
+</ParamField>
+
+<ParamField path="model_instance_name" type="str" default="extract_graph">
+  Model instance name for caching.
+</ParamField>
+
+### TextAnalyzerDefaults
+
+Used for NLP-based graph extraction.
+
+<ParamField path="extractor_type" type="NounPhraseExtractorType" default="RegexEnglish">
+  Noun phrase extractor type.
+</ParamField>
+
+<ParamField path="model_name" type="str" default="en_core_web_md">
+  SpaCy model name.
+</ParamField>
+
+<ParamField path="max_word_length" type="int" default="15">
+  Maximum word length to consider.
+</ParamField>
+
+<ParamField path="word_delimiter" type="str" default="' '">
+  Delimiter between words.
+</ParamField>
+
+<ParamField path="include_named_entities" type="bool" default="True">
+  Whether to include named entities.
+</ParamField>
+
+<ParamField path="exclude_nouns" type="list[str]">
+  List of nouns to exclude (uses EN_STOP_WORDS).
+</ParamField>
+
+<ParamField path="exclude_entity_tags" type="list[str]" default='["DATE"]'>
+  Entity tags to exclude.
+</ParamField>
+
+<ParamField path="exclude_pos_tags" type="list[str]" default='["DET", "PRON", "INTJ", "X"]'>
+  Part-of-speech tags to exclude.
+</ParamField>
+
+<ParamField path="noun_phrase_tags" type="list[str]" default='["PROPN", "NOUNS"]'>
+  Tags for noun phrases.
+</ParamField>
+
+<ParamField path="noun_phrase_grammars" type="dict[str, str]">
+  Grammar rules for noun phrase combination.
+  
+  Default:
+  ```python
+  {
+      "PROPN,PROPN": "PROPN",
+      "NOUN,NOUN": "NOUNS",
+      "NOUNS,NOUN": "NOUNS",
+      "ADJ,ADJ": "ADJ",
+      "ADJ,NOUN": "NOUNS"
+  }
+  ```
+</ParamField>
+
+### ExtractGraphNLPDefaults
+
+<ParamField path="normalize_edge_weights" type="bool" default="True">
+  Whether to normalize edge weights.
+</ParamField>
+
+<ParamField path="text_analyzer" type="TextAnalyzerDefaults">
+  Text analyzer configuration.
+</ParamField>
+
+<ParamField path="concurrent_requests" type="int" default="25">
+  Number of concurrent requests.
+</ParamField>
+
+<ParamField path="async_mode" type="AsyncType" default="Threaded">
+  Async mode to use.
+</ParamField>
+
+### GlobalSearchDefaults
+
+<ParamField path="map_prompt" type="None" default="None">
+  Map step prompt.
+</ParamField>
+
+<ParamField path="reduce_prompt" type="None" default="None">
+  Reduce step prompt.
+</ParamField>
+
+<ParamField path="knowledge_prompt" type="None" default="None">
+  Knowledge generation prompt.
+</ParamField>
+
+<ParamField path="max_context_tokens" type="int" default="12000">
+  Maximum context tokens.
+</ParamField>
+
+<ParamField path="data_max_tokens" type="int" default="12000">
+  Maximum data tokens.
+</ParamField>
+
+<ParamField path="map_max_length" type="int" default="1000">
+  Maximum map response length in words.
+</ParamField>
+
+<ParamField path="reduce_max_length" type="int" default="2000">
+  Maximum reduce response length in words.
+</ParamField>
+
+<ParamField path="dynamic_search_threshold" type="int" default="1">
+  Community rating threshold for inclusion.
+</ParamField>
+
+<ParamField path="dynamic_search_keep_parent" type="bool" default="False">
+  Keep parent community if children are relevant.
+</ParamField>
+
+<ParamField path="dynamic_search_num_repeats" type="int" default="1">
+  Number of times to rate each community.
+</ParamField>
+
+<ParamField path="dynamic_search_use_summary" type="bool" default="False">
+  Use community summary instead of full context.
+</ParamField>
+
+<ParamField path="dynamic_search_max_level" type="int" default="2">
+  Maximum community hierarchy level.
+</ParamField>
+
+<ParamField path="completion_model_id" type="str" default="default_completion_model">
+  Completion model ID.
+</ParamField>
+
+### StorageDefaults
+
+<ParamField path="type" type="str" default="file">
+  Storage type (from StorageType enum).
+</ParamField>
+
+<ParamField path="encoding" type="str | None" default="None">
+  Text encoding.
+</ParamField>
+
+<ParamField path="base_dir" type="str | None" default="None">
+  Base directory for file storage.
+</ParamField>
+
+<ParamField path="azure_connection_string" type="None" default="None">
+  Azure connection string.
+</ParamField>
+
+<ParamField path="azure_container_name" type="None" default="None">
+  Azure container name.
+</ParamField>
+
+<ParamField path="azure_account_url" type="None" default="None">
+  Azure account URL.
+</ParamField>
+
+<ParamField path="azure_cosmosdb_account_url" type="None" default="None">
+  Azure CosmosDB account URL.
+</ParamField>
+
+### InputDefaults
+
+<ParamField path="type" type="InputType" default="Text">
+  Input type.
+</ParamField>
+
+<ParamField path="encoding" type="str | None" default="None">
+  Text encoding.
+</ParamField>
+
+<ParamField path="file_pattern" type="None" default="None">
+  File pattern for matching input files.
+</ParamField>
+
+<ParamField path="id_column" type="None" default="None">
+  Column name for document IDs.
+</ParamField>
+
+<ParamField path="title_column" type="None" default="None">
+  Column name for document titles.
+</ParamField>
+
+<ParamField path="text_column" type="None" default="None">
+  Column name for document text.
+</ParamField>
+
+### InputStorageDefaults
+
+Extends StorageDefaults.
+
+<ParamField path="base_dir" type="str" default="input">
+  Base directory for input storage.
+</ParamField>
+
+### CacheStorageDefaults
+
+Extends StorageDefaults.
+
+<ParamField path="base_dir" type="str" default="cache">
+  Base directory for cache storage.
+</ParamField>
+
+### CacheDefaults
+
+<ParamField path="type" type="CacheType" default="Json">
+  Cache type.
+</ParamField>
+
+<ParamField path="storage" type="CacheStorageDefaults">
+  Cache storage configuration.
+</ParamField>
+
+### LocalSearchDefaults
+
+<ParamField path="prompt" type="None" default="None">
+  Local search prompt.
+</ParamField>
+
+<ParamField path="text_unit_prop" type="float" default="0.5">
+  Text unit proportion.
+</ParamField>
+
+<ParamField path="community_prop" type="float" default="0.15">
+  Community proportion.
+</ParamField>
+
+<ParamField path="conversation_history_max_turns" type="int" default="5">
+  Maximum conversation history turns.
+</ParamField>
+
+<ParamField path="top_k_entities" type="int" default="10">
+  Top k entities to retrieve.
+</ParamField>
+
+<ParamField path="top_k_relationships" type="int" default="10">
+  Top k relationships to retrieve.
+</ParamField>
+
+<ParamField path="max_context_tokens" type="int" default="12000">
+  Maximum context tokens.
+</ParamField>
+
+<ParamField path="completion_model_id" type="str" default="default_completion_model">
+  Completion model ID.
+</ParamField>
+
+<ParamField path="embedding_model_id" type="str" default="default_embedding_model">
+  Embedding model ID.
+</ParamField>
+
+### OutputStorageDefaults
+
+Extends StorageDefaults.
+
+<ParamField path="base_dir" type="str" default="output">
+  Base directory for output storage.
+</ParamField>
+
+### PruneGraphDefaults
+
+<ParamField path="min_node_freq" type="int" default="2">
+  Minimum node frequency.
+</ParamField>
+
+<ParamField path="max_node_freq_std" type="None" default="None">
+  Maximum node frequency standard deviation.
+</ParamField>
+
+<ParamField path="min_node_degree" type="int" default="1">
+  Minimum node degree.
+</ParamField>
+
+<ParamField path="max_node_degree_std" type="None" default="None">
+  Maximum node degree standard deviation.
+</ParamField>
+
+<ParamField path="min_edge_weight_pct" type="float" default="40.0">
+  Minimum edge weight percentage.
+</ParamField>
+
+<ParamField path="remove_ego_nodes" type="bool" default="True">
+  Whether to remove ego nodes.
+</ParamField>
+
+<ParamField path="lcc_only" type="bool" default="False">
+  Keep only largest connected component.
+</ParamField>
+
+### ReportingDefaults
+
+<ParamField path="type" type="ReportingType" default="file">
+  Reporting type.
+</ParamField>
+
+<ParamField path="base_dir" type="str" default="logs">
+  Base directory for reporting.
+</ParamField>
+
+<ParamField path="connection_string" type="None" default="None">
+  Connection string for blob reporting.
+</ParamField>
+
+<ParamField path="container_name" type="None" default="None">
+  Container name for blob reporting.
+</ParamField>
+
+<ParamField path="storage_account_blob_url" type="None" default="None">
+  Storage account blob URL.
+</ParamField>
+
+### SnapshotsDefaults
+
+<ParamField path="embeddings" type="bool" default="False">
+  Whether to save embedding snapshots.
+</ParamField>
+
+<ParamField path="graphml" type="bool" default="False">
+  Whether to save GraphML snapshots.
+</ParamField>
+
+<ParamField path="raw_graph" type="bool" default="False">
+  Whether to save raw graph snapshots.
+</ParamField>
+
+### SummarizeDescriptionsDefaults
+
+<ParamField path="prompt" type="None" default="None">
+  Summarization prompt.
+</ParamField>
+
+<ParamField path="max_length" type="int" default="500">
+  Maximum summary length in tokens.
+</ParamField>
+
+<ParamField path="max_input_tokens" type="int" default="4000">
+  Maximum input tokens.
+</ParamField>
+
+<ParamField path="completion_model_id" type="str" default="default_completion_model">
+  Completion model ID.
+</ParamField>
+
+<ParamField path="model_instance_name" type="str" default="summarize_descriptions">
+  Model instance name for caching.
+</ParamField>
+
+### UpdateOutputStorageDefaults
+
+Extends StorageDefaults.
+
+<ParamField path="base_dir" type="str" default="update_output">
+  Base directory for update output storage.
+</ParamField>
+
+### VectorStoreDefaults
+
+<ParamField path="type" type="str" default="lancedb">
+  Vector store type (from VectorStoreType enum).
+</ParamField>
+
+<ParamField path="db_uri" type="str" default="output/lancedb">
+  Database URI for vector store.
+</ParamField>
+
+### GraphRagConfigDefaults
+
+Root configuration defaults.
+
+<ParamField path="models" type="dict" default="{}">
+  Legacy model configurations.
+</ParamField>
+
+<ParamField path="completion_models" type="dict" default="{}">
+  Completion model configurations.
+</ParamField>
+
+<ParamField path="embedding_models" type="dict" default="{}">
+  Embedding model configurations.
+</ParamField>
+
+<ParamField path="concurrent_requests" type="int" default="25">
+  Default concurrent requests.
+</ParamField>
+
+<ParamField path="async_mode" type="AsyncType" default="Threaded">
+  Default async mode.
+</ParamField>
+
+<ParamField path="reporting" type="ReportingDefaults">
+  Reporting configuration defaults.
+</ParamField>
+
+<ParamField path="input_storage" type="InputStorageDefaults">
+  Input storage configuration defaults.
+</ParamField>
+
+<ParamField path="output_storage" type="OutputStorageDefaults">
+  Output storage configuration defaults.
+</ParamField>
+
+<ParamField path="update_output_storage" type="UpdateOutputStorageDefaults">
+  Update output storage configuration defaults.
+</ParamField>
+
+<ParamField path="cache" type="CacheDefaults">
+  Cache configuration defaults.
+</ParamField>
+
+<ParamField path="input" type="InputDefaults">
+  Input configuration defaults.
+</ParamField>
+
+<ParamField path="embed_text" type="EmbedTextDefaults">
+  Text embedding configuration defaults.
+</ParamField>
+
+<ParamField path="chunking" type="ChunkingDefaults">
+  Chunking configuration defaults.
+</ParamField>
+
+<ParamField path="snapshots" type="SnapshotsDefaults">
+  Snapshots configuration defaults.
+</ParamField>
+
+<ParamField path="extract_graph" type="ExtractGraphDefaults">
+  Graph extraction configuration defaults.
+</ParamField>
+
+<ParamField path="extract_graph_nlp" type="ExtractGraphNLPDefaults">
+  NLP graph extraction configuration defaults.
+</ParamField>
+
+<ParamField path="summarize_descriptions" type="SummarizeDescriptionsDefaults">
+  Description summarization configuration defaults.
+</ParamField>
+
+<ParamField path="community_reports" type="CommunityReportDefaults">
+  Community reports configuration defaults.
+</ParamField>
+
+<ParamField path="extract_claims" type="ExtractClaimsDefaults">
+  Claims extraction configuration defaults.
+</ParamField>
+
+<ParamField path="prune_graph" type="PruneGraphDefaults">
+  Graph pruning configuration defaults.
+</ParamField>
+
+<ParamField path="cluster_graph" type="ClusterGraphDefaults">
+  Graph clustering configuration defaults.
+</ParamField>
+
+<ParamField path="local_search" type="LocalSearchDefaults">
+  Local search configuration defaults.
+</ParamField>
+
+<ParamField path="global_search" type="GlobalSearchDefaults">
+  Global search configuration defaults.
+</ParamField>
+
+<ParamField path="drift_search" type="DriftSearchDefaults">
+  DRIFT search configuration defaults.
+</ParamField>
+
+<ParamField path="basic_search" type="BasicSearchDefaults">
+  Basic search configuration defaults.
+</ParamField>
+
+<ParamField path="vector_store" type="VectorStoreDefaults">
+  Vector store configuration defaults.
+</ParamField>
+
+<ParamField path="workflows" type="None" default="None">
+  Workflows list.
+</ParamField>

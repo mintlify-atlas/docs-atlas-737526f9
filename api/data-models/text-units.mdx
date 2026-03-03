@@ -1,0 +1,146 @@
+---
+title: Text units
+description: Text unit data model representing text chunks in the knowledge graph
+---
+
+## Overview
+
+The `TextUnit` class represents a chunk of text from a source document. Text units are the atomic pieces of text from which entities, relationships, and claims are extracted. They serve as the bridge between the original source documents and the knowledge graph.
+
+Each text unit maintains links to the entities, relationships, and covariates (claims) that were extracted from it, enabling source attribution and context retrieval.
+
+Text units inherit from the `Identified` base class, which provides `id` and `short_id` fields.
+
+## Schema
+
+### Core fields
+
+<ResponseField name="id" type="string" required>
+  Unique identifier for the text unit.
+</ResponseField>
+
+<ResponseField name="short_id" type="string | null">
+  Human-readable ID used to refer to this text unit in prompts or texts displayed to users.
+</ResponseField>
+
+<ResponseField name="text" type="string" required>
+  The actual text content of the unit. This is the chunk of text from the source document.
+</ResponseField>
+
+### Relationships
+
+<ResponseField name="entity_ids" type="string[]">
+  List of entity IDs that were extracted from or mentioned in this text unit. Links the text to entities in the knowledge graph.
+</ResponseField>
+
+<ResponseField name="relationship_ids" type="string[]">
+  List of relationship IDs that were extracted from this text unit. Links the text to relationships in the knowledge graph.
+</ResponseField>
+
+<ResponseField name="covariate_ids" type="object">
+  Dictionary mapping covariate types to lists of covariate IDs. For example, `{"claim": ["claim1", "claim2"]}` indicates which claims were extracted from this text.
+</ResponseField>
+
+### Document reference
+
+<ResponseField name="document_id" type="string">
+  ID of the source document from which this text unit was extracted. Enables tracing back to the original document.
+</ResponseField>
+
+### Metadata
+
+<ResponseField name="n_tokens" type="integer">
+  The number of tokens in the text. Used for chunking strategies, cost estimation, and context window management.
+</ResponseField>
+
+<ResponseField name="attributes" type="object">
+  A dictionary of additional attributes associated with the text unit. May include:
+  - `chunk_id`: Position of this chunk in the document
+  - `page_number`: Page number in the source document
+  - `section`: Section or chapter name
+  - Custom metadata specific to your use case
+</ResponseField>
+
+## Example
+
+```json
+{
+  "id": "t1234567-89ab-cdef-0123-456789abcdef",
+  "short_id": "0",
+  "text": "Microsoft Corporation was founded by Bill Gates and Paul Allen on April 4, 1975. The company has grown to become one of the world's largest technology companies.",
+  "entity_ids": ["e1", "e2", "e3"],
+  "relationship_ids": ["r1", "r2"],
+  "covariate_ids": {
+    "claim": ["claim1", "claim2"]
+  },
+  "n_tokens": 32,
+  "document_id": "doc1234567-89ab-cdef-0123-456789abcdef",
+  "attributes": {
+    "chunk_id": 5,
+    "page_number": 1,
+    "section": "Company History"
+  }
+}
+```
+
+## Creating from dictionary
+
+The `TextUnit` class provides a `from_dict()` class method to create instances from dictionary data:
+
+```python
+text_unit = TextUnit.from_dict({
+    "id": "t1234567-89ab-cdef-0123-456789abcdef",
+    "text": "Microsoft Corporation was founded by Bill Gates and Paul Allen on April 4, 1975.",
+    "entity_ids": ["e1", "e2", "e3"],
+    "relationship_ids": ["r1", "r2"],
+    "n_tokens": 32,
+    "document_id": "doc1234567-89ab-cdef-0123-456789abcdef",
+    "attributes": {"chunk_id": 5}
+})
+```
+
+<Expandable title="Custom key mapping">
+  The `from_dict()` method accepts custom key names for flexible data import:
+  
+  - `id_key`: Key for the text unit ID (default: "id")
+  - `short_id_key`: Key for the human-readable ID (default: "human_readable_id")
+  - `text_key`: Key for the text content (default: "text")
+  - `entities_key`: Key for entity IDs (default: "entity_ids")
+  - `relationships_key`: Key for relationship IDs (default: "relationship_ids")
+  - `covariates_key`: Key for covariate IDs (default: "covariate_ids")
+  - `n_tokens_key`: Key for token count (default: "n_tokens")
+  - `document_id_key`: Key for document ID (default: "document_id")
+  - `attributes_key`: Key for additional attributes (default: "attributes")
+</Expandable>
+
+## Text chunking
+
+Text units are created by chunking source documents into smaller pieces. The chunking strategy affects:
+
+- **Extraction quality**: Smaller chunks may miss relationships across boundaries; larger chunks may dilute entity detection
+- **Context window**: Chunk size should fit within LLM context windows
+- **Token count**: The `n_tokens` field helps manage context and costs
+
+## Role in the knowledge graph
+
+Text units serve several critical functions:
+
+### Source attribution
+Every entity, relationship, and claim maintains `text_unit_ids` that point back to the text units from which they were extracted. This enables:
+- Verifying extracted information
+- Showing evidence for claims
+- Providing context for search results
+
+### Bidirectional linking
+Text units maintain forward links to extracted graph elements via `entity_ids`, `relationship_ids`, and `covariate_ids`, while those elements maintain backward links via their `text_unit_ids` fields.
+
+### Document traceability
+The `document_id` field enables tracing from any graph element back through text units to the original source document.
+
+## Use cases
+
+- **Context retrieval**: Fetch original text for entities or relationships
+- **Evidence display**: Show source text snippets to users
+- **Quality assurance**: Verify extraction accuracy against source
+- **Incremental updates**: Re-process specific text units when documents change
+- **Token budgeting**: Calculate context window usage using `n_tokens`

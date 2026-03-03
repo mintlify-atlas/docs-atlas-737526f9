@@ -1,0 +1,171 @@
+---
+title: graphrag update
+description: Update an existing knowledge graph index with new data
+---
+
+The `update` command incrementally updates an existing knowledge graph index with new documents, preserving existing entities and relationships while adding new ones.
+
+## Usage
+
+```bash
+graphrag update [OPTIONS]
+```
+
+## Options
+
+<ParamField path="--root" type="string" default="current directory">
+  The project root directory containing the `settings.yaml` configuration file and existing index.
+  
+  **Aliases**: `-r`
+</ParamField>
+
+<ParamField path="--method" type="string" default="standard">
+  The indexing method to use for the update.
+  
+  **Aliases**: `-m`
+  
+  Available methods:
+  - `standard` - Traditional GraphRAG indexing with LLM-based extraction
+  - `fast` - Fast indexing using NLP-based extraction
+</ParamField>
+
+<ParamField path="--verbose" type="boolean" default="false">
+  Run the update pipeline with verbose logging.
+  
+  **Aliases**: `-v`
+</ParamField>
+
+<ParamField path="--cache" type="boolean" default="true">
+  Use LLM response caching to avoid redundant API calls.
+  
+  Use `--no-cache` to disable caching.
+</ParamField>
+
+<ParamField path="--skip-validation" type="boolean" default="false">
+  Skip any preflight validation checks. Useful when running without LLM steps.
+</ParamField>
+
+## Examples
+
+### Basic update
+
+Update the index with new documents:
+
+```bash
+graphrag update
+```
+
+### Specify project directory
+
+```bash
+graphrag update --root ./my-project
+```
+
+### Use fast update method
+
+```bash
+graphrag update --method fast
+```
+
+### Verbose logging
+
+```bash
+graphrag update --verbose
+```
+
+### Disable caching
+
+```bash
+graphrag update --no-cache
+```
+
+## Output
+
+By default, update outputs are saved to the `update_output/` directory to avoid overwriting your existing index. This allows you to:
+
+1. Review the updated index before replacing the original
+2. Keep multiple versions of the index
+3. Safely roll back if needed
+
+The update creates the same output files as the index command:
+
+- `entities.parquet`
+- `relationships.parquet`
+- `communities.parquet`
+- `community_reports.parquet`
+- `text_units.parquet`
+- `covariates.parquet` (if enabled)
+
+## How update works
+
+The update process:
+
+1. **Load existing index** - Reads the current index from the `output/` directory
+2. **Process new documents** - Identifies and processes new documents in the `input/` directory
+3. **Merge entities** - Integrates new entities with existing ones, resolving duplicates
+4. **Update relationships** - Adds new relationships and updates existing ones
+5. **Recompute communities** - Recalculates community structure with the updated graph
+6. **Generate reports** - Creates or updates community reports
+7. **Save to update_output** - Writes the updated index to `update_output/` directory
+
+## Incremental vs. full reindex
+
+Use `update` when:
+- You have new documents to add to an existing index
+- You want to preserve existing extracted entities and relationships
+- You need faster processing for incremental changes
+
+Use `index` when:
+- Building a new index from scratch
+- You've made significant changes to prompts or configuration
+- You want to completely rebuild the knowledge graph
+
+## Configuration
+
+You can customize the update output directory in `settings.yaml`:
+
+```yaml
+update_output_storage:
+  type: file
+  base_dir: custom_update_output
+```
+
+## Best practices
+
+1. **Backup your index**: Before running update, backup your `output/` directory
+2. **Review updates**: Check the `update_output/` directory before replacing your production index
+3. **Consistent configuration**: Use the same settings for update as you used for the initial index
+4. **Monitor duplicates**: Review merged entities to ensure proper deduplication
+
+## Merging updates into production
+
+After reviewing the updated index:
+
+```bash
+# Backup the current index
+cp -r output output_backup
+
+# Replace with updated index
+rm -rf output
+mv update_output output
+```
+
+## Performance considerations
+
+- Update is generally faster than full reindex since it only processes new documents
+- Community detection is recalculated on the full graph, which can take time for large indexes
+- Caching helps avoid re-processing similar content
+
+## Error handling
+
+The update command will exit with status code 1 if errors occur. Common issues:
+
+- **Missing existing index**: Ensure you've run `graphrag index` first
+- **Incompatible schema**: Use the same GraphRAG version for index and update
+- **Configuration mismatch**: Maintain consistent settings between index and update operations
+
+## Next steps
+
+- [Query the updated index](/cli/query)
+- [Understand indexing configuration](/indexing/overview)
+- [Monitor index quality](/guides/cli-usage)

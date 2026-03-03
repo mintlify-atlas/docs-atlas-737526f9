@@ -1,0 +1,127 @@
+---
+title: Configuration overview
+description: Learn how to configure GraphRAG for your indexing and query needs
+---
+
+The GraphRAG system is highly configurable, allowing you to customize everything from language models to storage mechanisms. This section provides a comprehensive guide to configuring GraphRAG for your specific use case.
+
+## Configuration modes
+
+GraphRAG supports a default configuration mode that is designed to work out-of-the-box with minimal setup. You can configure GraphRAG through:
+
+<CardGroup cols={2}>
+  <Card title="Init command" icon="terminal" href="/configuration/initialization">
+    Get started quickly with the `graphrag init` command
+  </Card>
+  <Card title="Settings file" icon="file-code" href="/configuration/settings">
+    Customize behavior through `settings.yaml` configuration
+  </Card>
+</CardGroup>
+
+## Quick start
+
+The simplest way to get started is by running the initialization command:
+
+```bash
+graphrag init --root ./my-project
+```
+
+This creates:
+- `settings.yaml` - Main configuration file
+- `.env` - Environment variables for API keys
+- `prompts/` - Default LLM prompts
+
+## Configuration structure
+
+GraphRAG configuration is organized into several key areas:
+
+<AccordionGroup>
+  <Accordion title="Language models">
+    Configure completion and embedding models, including provider settings, authentication, retry logic, and rate limiting.
+    
+    [View LLM configuration details](/configuration/llm-models)
+  </Accordion>
+  
+  <Accordion title="Input and processing">
+    Set up document ingestion, text chunking, and preprocessing options for your data pipeline.
+    
+    Includes support for CSV, TXT, and JSON formats with configurable chunking strategies.
+  </Accordion>
+  
+  <Accordion title="Storage and caching">
+    Configure storage backends for inputs, outputs, and caching to optimize performance and cost.
+    
+    [View storage configuration details](/configuration/storage)
+  </Accordion>
+  
+  <Accordion title="Graph extraction">
+    Tune entity extraction, relationship detection, and graph construction parameters.
+    
+    Choose between LLM-based and NLP-based extraction methods.
+  </Accordion>
+  
+  <Accordion title="Community detection">
+    Configure hierarchical clustering and community report generation.
+    
+    Uses Leiden algorithm for graph partitioning with customizable parameters.
+  </Accordion>
+  
+  <Accordion title="Query methods">
+    Set up local, global, drift, and basic search with custom prompts and context limits.
+    
+    Each search method has dedicated configuration options.
+  </Accordion>
+</AccordionGroup>
+
+## Environment variables
+
+GraphRAG supports environment variable substitution in configuration files using `${VAR_NAME}` syntax:
+
+```yaml
+completion_models:
+  default_completion_model:
+    api_key: ${GRAPHRAG_API_KEY}
+```
+
+```bash .env
+GRAPHRAG_API_KEY=your-api-key-here
+```
+
+<Note>
+Environment variables are automatically loaded from `.env` files in your project root.
+</Note>
+
+## Configuration defaults
+
+GraphRAG includes sensible defaults for most settings. You only need to configure:
+
+<Steps>
+  <Step title="API credentials">
+    Set your language model API keys and endpoints
+  </Step>
+  <Step title="Input location">
+    Specify where your source documents are located
+  </Step>
+  <Step title="Optional customization">
+    Tune advanced settings based on your requirements
+  </Step>
+</Steps>
+
+For a complete list of default values, see the [defaults.py file](https://github.com/microsoft/graphrag/blob/main/graphrag/config/defaults.py) in the source code.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Initialize your project" icon="rocket" href="/configuration/initialization">
+    Run `graphrag init` to create your configuration
+  </Card>
+  <Card title="Configure LLM models" icon="brain" href="/configuration/llm-models">
+    Set up your language models and embeddings
+  </Card>
+  <Card title="Settings reference" icon="book" href="/configuration/settings">
+    Explore all available configuration options
+  </Card>
+  <Card title="Storage setup" icon="database" href="/configuration/storage">
+    Configure input, output, and cache storage
+  </Card>
+</CardGroup>
